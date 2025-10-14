@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun add:*)",
+      "Bash(mkdir:*)",
+      "Bash(rm:*)",
+      "Bash(DATABASE_URL=\"postgresql://placeholder\" bun run:*)",
+      "Bash(brew install:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
