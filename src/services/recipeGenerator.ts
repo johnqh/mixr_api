@@ -2,7 +2,8 @@ import OpenAI from 'openai';
 import { env } from '../config/env';
 
 const openai = new OpenAI({
-  apiKey: env.OPENAI_API_KEY,
+  apiKey: env.OPENAI_API_KEY || 'lm-studio', // LM Studio doesn't require a real API key
+  baseURL: 'http://localhost:1234/v1',
 });
 
 interface GenerateRecipeParams {
@@ -72,7 +73,7 @@ Ensure the cocktail is creative, delicious, and perfectly matches the ${moodName
 
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
+      model: 'qwen-32b-everything', // Using LM Studio model
       messages: [
         {
           role: 'system',
@@ -84,7 +85,8 @@ Ensure the cocktail is creative, delicious, and perfectly matches the ${moodName
           content: prompt,
         },
       ],
-      response_format: { type: 'json_object' },
+      // Note: LM Studio doesn't support 'json_object' response format
+      // Relying on system message to enforce JSON output
       temperature: 0.8,
     });
 

@@ -1,12 +1,12 @@
 {
-  "id": "fe2b96ba-5bf6-4d96-a6a0-4074b263b443",
+  "id": "7b952d1a-c51f-4142-b0de-c179f13a3969",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.equipment": {
+    "mixr.equipment": {
       "name": "equipment",
-      "schema": "",
+      "schema": "mixr",
       "columns": {
         "id": {
           "name": "id",
@@ -17,7 +17,7 @@
         "subcategory": {
           "name": "subcategory",
           "type": "equipment_subcategory",
-          "typeSchema": "public",
+          "typeSchema": "mixr",
           "primaryKey": false,
           "notNull": true
         },
@@ -49,9 +49,9 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.ingredients": {
+    "mixr.ingredients": {
       "name": "ingredients",
-      "schema": "",
+      "schema": "mixr",
       "columns": {
         "id": {
           "name": "id",
@@ -62,7 +62,7 @@
         "subcategory": {
           "name": "subcategory",
           "type": "ingredient_subcategory",
-          "typeSchema": "public",
+          "typeSchema": "mixr",
           "primaryKey": false,
           "notNull": true
         },
@@ -94,9 +94,9 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.moods": {
+    "mixr.moods": {
       "name": "moods",
-      "schema": "",
+      "schema": "mixr",
       "columns": {
         "id": {
           "name": "id",
@@ -150,9 +150,9 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.recipe_equipment": {
+    "mixr.recipe_equipment": {
       "name": "recipe_equipment",
-      "schema": "",
+      "schema": "mixr",
       "columns": {
         "id": {
           "name": "id",
@@ -179,6 +179,7 @@
           "name": "recipe_equipment_recipe_id_recipes_id_fk",
           "tableFrom": "recipe_equipment",
           "tableTo": "recipes",
+          "schemaTo": "mixr",
           "columnsFrom": [
             "recipe_id"
           ],
@@ -192,6 +193,7 @@
           "name": "recipe_equipment_equipment_id_equipment_id_fk",
           "tableFrom": "recipe_equipment",
           "tableTo": "equipment",
+          "schemaTo": "mixr",
           "columnsFrom": [
             "equipment_id"
           ],
@@ -208,9 +210,9 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.recipe_ingredients": {
+    "mixr.recipe_ingredients": {
       "name": "recipe_ingredients",
-      "schema": "",
+      "schema": "mixr",
       "columns": {
         "id": {
           "name": "id",
@@ -243,6 +245,7 @@
           "name": "recipe_ingredients_recipe_id_recipes_id_fk",
           "tableFrom": "recipe_ingredients",
           "tableTo": "recipes",
+          "schemaTo": "mixr",
           "columnsFrom": [
             "recipe_id"
           ],
@@ -256,6 +259,7 @@
           "name": "recipe_ingredients_ingredient_id_ingredients_id_fk",
           "tableFrom": "recipe_ingredients",
           "tableTo": "ingredients",
+          "schemaTo": "mixr",
           "columnsFrom": [
             "ingredient_id"
           ],
@@ -272,9 +276,9 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.recipe_steps": {
+    "mixr.recipe_steps": {
       "name": "recipe_steps",
-      "schema": "",
+      "schema": "mixr",
       "columns": {
         "id": {
           "name": "id",
@@ -307,6 +311,7 @@
           "name": "recipe_steps_recipe_id_recipes_id_fk",
           "tableFrom": "recipe_steps",
           "tableTo": "recipes",
+          "schemaTo": "mixr",
           "columnsFrom": [
             "recipe_id"
           ],
@@ -323,9 +328,9 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.recipes": {
+    "mixr.recipes": {
       "name": "recipes",
-      "schema": "",
+      "schema": "mixr",
       "columns": {
         "id": {
           "name": "id",
@@ -365,6 +370,7 @@
           "name": "recipes_mood_id_moods_id_fk",
           "tableFrom": "recipes",
           "tableTo": "moods",
+          "schemaTo": "mixr",
           "columnsFrom": [
             "mood_id"
           ],
@@ -383,9 +389,9 @@
     }
   },
   "enums": {
-    "public.equipment_subcategory": {
+    "mixr.equipment_subcategory": {
       "name": "equipment_subcategory",
-      "schema": "public",
+      "schema": "mixr",
       "values": [
         "essential",
         "glassware",
@@ -393,9 +399,9 @@
         "advanced"
       ]
     },
-    "public.ingredient_subcategory": {
+    "mixr.ingredient_subcategory": {
       "name": "ingredient_subcategory",
-      "schema": "public",
+      "schema": "mixr",
       "values": [
         "spirit",
         "wine",
@@ -406,7 +412,9 @@
       ]
     }
   },
-  "schemas": {},
+  "schemas": {
+    "mixr": "mixr"
+  },
   "sequences": {},
   "roles": {},
   "policies": {},

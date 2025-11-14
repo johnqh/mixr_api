@@ -1,15 +1,18 @@
-import { pgTable, serial, varchar, text, timestamp, integer, pgEnum } from 'drizzle-orm/pg-core';
+import { serial, varchar, text, timestamp, integer, pgSchema } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
+// Define the mixr schema
+export const mixrSchema = pgSchema('mixr');
+
 // Enums
-export const equipmentSubcategoryEnum = pgEnum('equipment_subcategory', [
+export const equipmentSubcategoryEnum = mixrSchema.enum('equipment_subcategory', [
   'essential',
   'glassware',
   'garnish',
   'advanced',
 ]);
 
-export const ingredientSubcategoryEnum = pgEnum('ingredient_subcategory', [
+export const ingredientSubcategoryEnum = mixrSchema.enum('ingredient_subcategory', [
   'spirit',
   'wine',
   'other_alcohol',
@@ -19,7 +22,7 @@ export const ingredientSubcategoryEnum = pgEnum('ingredient_subcategory', [
 ]);
 
 // Equipment Table
-export const equipment = pgTable('equipment', {
+export const equipment = mixrSchema.table('equipment', {
   id: serial('id').primaryKey(),
   subcategory: equipmentSubcategoryEnum('subcategory').notNull(),
   name: varchar('name', { length: 255 }).notNull(),
@@ -28,7 +31,7 @@ export const equipment = pgTable('equipment', {
 });
 
 // Ingredients Table
-export const ingredients = pgTable('ingredients', {
+export const ingredients = mixrSchema.table('ingredients', {
   id: serial('id').primaryKey(),
   subcategory: ingredientSubcategoryEnum('subcategory').notNull(),
   name: varchar('name', { length: 255 }).notNull(),
@@ -37,7 +40,7 @@ export const ingredients = pgTable('ingredients', {
 });
 
 // Moods Table
-export const moods = pgTable('moods', {
+export const moods = mixrSchema.table('moods', {
   id: serial('id').primaryKey(),
   emoji: varchar('emoji', { length: 10 }).notNull(),
   name: varchar('name', { length: 100 }).notNull(),
@@ -48,7 +51,7 @@ export const moods = pgTable('moods', {
 });
 
 // Recipes Table
-export const recipes = pgTable('recipes', {
+export const recipes = mixrSchema.table('recipes', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
@@ -57,7 +60,7 @@ export const recipes = pgTable('recipes', {
 });
 
 // Recipe Ingredients Junction Table
-export const recipeIngredients = pgTable('recipe_ingredients', {
+export const recipeIngredients = mixrSchema.table('recipe_ingredients', {
   id: serial('id').primaryKey(),
   recipeId: integer('recipe_id').references(() => recipes.id).notNull(),
   ingredientId: integer('ingredient_id').references(() => ingredients.id).notNull(),
@@ -65,7 +68,7 @@ export const recipeIngredients = pgTable('recipe_ingredients', {
 });
 
 // Recipe Steps Table
-export const recipeSteps = pgTable('recipe_steps', {
+export const recipeSteps = mixrSchema.table('recipe_steps', {
   id: serial('id').primaryKey(),
   recipeId: integer('recipe_id').references(() => recipes.id).notNull(),
   stepNumber: integer('step_number').notNull(),
@@ -73,7 +76,7 @@ export const recipeSteps = pgTable('recipe_steps', {
 });
 
 // Recipe Equipment Junction Table
-export const recipeEquipment = pgTable('recipe_equipment', {
+export const recipeEquipment = mixrSchema.table('recipe_equipment', {
   id: serial('id').primaryKey(),
   recipeId: integer('recipe_id').references(() => recipes.id).notNull(),
   equipmentId: integer('equipment_id').references(() => equipment.id).notNull(),
