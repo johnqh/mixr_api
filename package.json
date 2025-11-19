@@ -23,7 +23,7 @@
     "@hono/zod-validator": "^0.7.4",
     "drizzle-orm": "^0.44.6",
     "firebase-admin": "^13.6.0",
-    "hono": "^4.9.12",
+    "hono": "^4.10.6",
     "openai": "^6.3.0",
     "postgres": "^3.4.7",
     "zod": "^4.1.12"
