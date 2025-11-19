@@ -1,15 +1,62 @@
 import { Hono } from 'hono';
-import { eq, inArray, desc } from 'drizzle-orm';
-import { db, equipment, ingredients, moods, recipes, recipeIngredients, recipeSteps, recipeEquipment } from '../db';
+import { eq, inArray, desc, and, sql } from 'drizzle-orm';
+import { db, equipment, ingredients, moods, recipes, recipeIngredients, recipeSteps, recipeEquipment, users, userPreferences, recipeRatings } from '../db';
 import { generateRecipe } from '../services/recipeGenerator';
+import { requireAuth, optionalAuth, AuthUser } from '../middleware/auth';
 
 const app = new Hono();
 
+// Helper function to get or create user
+async function getOrCreateUser(authUser: AuthUser) {
+  // Check if user exists
+  let [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, authUser.uid))
+    .limit(1);
+
+  // Create user if doesn't exist
+  if (!user && authUser.email) {
+    [user] = await db
+      .insert(users)
+      .values({
+        id: authUser.uid,
+        email: authUser.email,
+        displayName: authUser.email.split('@')[0],
+      })
+      .returning();
+  }
+
+  return user;
+}
+
 // Generate a new recipe
-app.post('/generate', async (c) => {
+app.post('/generate', requireAuth, async (c) => {
   try {
+    const authUser = c.get('user') as AuthUser;
     const body = await c.req.json();
-    const { equipment_ids, ingredient_ids, mood_id } = body;
+    let { equipment_ids, ingredient_ids, mood_id } = body;
+
+    // Ensure user exists
+    await getOrCreateUser(authUser);
+
+    // If equipment_ids or ingredient_ids are empty, use user's saved preferences
+    if ((!equipment_ids || equipment_ids.length === 0 || !ingredient_ids || ingredient_ids.length === 0)) {
+      const [prefs] = await db
+        .select()
+        .from(userPreferences)
+        .where(eq(userPreferences.userId, authUser.uid))
+        .limit(1);
+
+      if (prefs) {
+        if (!equipment_ids || equipment_ids.length === 0) {
+          equipment_ids = prefs.equipmentIds || [];
+        }
+        if (!ingredient_ids || ingredient_ids.length === 0) {
+          ingredient_ids = prefs.ingredientIds || [];
+        }
+      }
+    }
 
     // Validate input
     if (!equipment_ids || !Array.isArray(equipment_ids) || equipment_ids.length === 0) {
@@ -102,13 +149,14 @@ app.post('/generate', async (c) => {
       moodExamples: mood.exampleDrinks,
     });
 
-    // Save recipe to database
+    // Save recipe to database with user association
     const [savedRecipe] = await db
       .insert(recipes)
       .values({
         name: generatedRecipe.name,
         description: generatedRecipe.description,
         moodId: mood_id,
+        userId: authUser.uid,
       })
       .returning();
 
@@ -319,5 +367,340 @@ async function getCompleteRecipe(recipeId: number) {
     })),
   };
 }
+
+// POST /api/recipes/:id/ratings - Submit or update a rating/review
+app.post('/:id/ratings', requireAuth, async (c) => {
+  const recipeId = parseInt(c.req.param('id'));
+
+  if (isNaN(recipeId)) {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid recipe ID',
+      },
+      400
+    );
+  }
+
+  try {
+    const authUser = c.get('user') as AuthUser;
+    const body = await c.req.json();
+    const { stars, review } = body;
+
+    // Validate stars
+    if (!stars || typeof stars !== 'number' || stars < 1 || stars > 5) {
+      return c.json(
+        {
+          success: false,
+          error: 'stars must be a number between 1 and 5',
+        },
+        400
+      );
+    }
+
+    // Validate review if provided
+    if (review !== undefined && review !== null) {
+      if (typeof review !== 'string') {
+        return c.json(
+          {
+            success: false,
+            error: 'review must be a string',
+          },
+          400
+        );
+      }
+      if (review.length > 500) {
+        return c.json(
+          {
+            success: false,
+            error: 'review must be 500 characters or less',
+          },
+          400
+        );
+      }
+    }
+
+    // Ensure user exists
+    const user = await getOrCreateUser(authUser);
+
+    // Check if recipe exists
+    const [recipe] = await db
+      .select()
+      .from(recipes)
+      .where(eq(recipes.id, recipeId))
+      .limit(1);
+
+    if (!recipe) {
+      return c.json(
+        {
+          success: false,
+          error: 'Recipe not found',
+        },
+        404
+      );
+    }
+
+    // Upsert rating (insert or update if already exists)
+    const [rating] = await db
+      .insert(recipeRatings)
+      .values({
+        recipeId,
+        userId: authUser.uid,
+        stars,
+        review: review || null,
+      })
+      .onConflictDoUpdate({
+        target: [recipeRatings.userId, recipeRatings.recipeId],
+        set: {
+          stars,
+          review: review || null,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+
+    return c.json({
+      success: true,
+      data: {
+        id: rating.id,
+        recipe_id: rating.recipeId,
+        user_id: rating.userId,
+        user_name: user?.displayName || 'Anonymous',
+        user_email: user?.email || '',
+        stars: rating.stars,
+        review: rating.review,
+        created_at: rating.createdAt,
+        updated_at: rating.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error('Submit rating error:', error);
+    return c.json(
+      {
+        success: false,
+        error: 'Failed to submit rating',
+      },
+      500
+    );
+  }
+});
+
+// GET /api/recipes/:id/ratings - Get all ratings for a recipe
+app.get('/:id/ratings', async (c) => {
+  const recipeId = parseInt(c.req.param('id'));
+
+  if (isNaN(recipeId)) {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid recipe ID',
+      },
+      400
+    );
+  }
+
+  try {
+    const limit = Math.min(parseInt(c.req.query('limit') || '20'), 100);
+    const offset = parseInt(c.req.query('offset') || '0');
+    const sort = c.req.query('sort') || 'newest';
+
+    // Determine sort order
+    let orderClause;
+    switch (sort) {
+      case 'oldest':
+        orderClause = recipeRatings.createdAt;
+        break;
+      case 'highest':
+        orderClause = desc(recipeRatings.stars);
+        break;
+      case 'lowest':
+        orderClause = recipeRatings.stars;
+        break;
+      case 'newest':
+      default:
+        orderClause = desc(recipeRatings.createdAt);
+    }
+
+    const ratings = await db
+      .select({
+        id: recipeRatings.id,
+        recipeId: recipeRatings.recipeId,
+        userId: recipeRatings.userId,
+        userName: users.displayName,
+        userEmail: users.email,
+        stars: recipeRatings.stars,
+        review: recipeRatings.review,
+        createdAt: recipeRatings.createdAt,
+        updatedAt: recipeRatings.updatedAt,
+      })
+      .from(recipeRatings)
+      .innerJoin(users, eq(recipeRatings.userId, users.id))
+      .where(eq(recipeRatings.recipeId, recipeId))
+      .orderBy(orderClause)
+      .limit(limit)
+      .offset(offset);
+
+    // Get total count
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(recipeRatings)
+      .where(eq(recipeRatings.recipeId, recipeId));
+
+    return c.json({
+      success: true,
+      data: ratings.map((r) => ({
+        id: r.id,
+        recipe_id: r.recipeId,
+        user_id: r.userId,
+        user_name: r.userName,
+        user_email: r.userEmail,
+        stars: r.stars,
+        review: r.review,
+        created_at: r.createdAt,
+        updated_at: r.updatedAt,
+      })),
+      count: countResult.count,
+    });
+  } catch (error) {
+    console.error('Get ratings error:', error);
+    return c.json(
+      {
+        success: false,
+        error: 'Failed to fetch ratings',
+      },
+      500
+    );
+  }
+});
+
+// GET /api/recipes/:id/ratings/aggregate - Get aggregate rating statistics
+app.get('/:id/ratings/aggregate', async (c) => {
+  const recipeId = parseInt(c.req.param('id'));
+
+  if (isNaN(recipeId)) {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid recipe ID',
+      },
+      400
+    );
+  }
+
+  try {
+    // Get aggregate stats
+    const [stats] = await db
+      .select({
+        totalRatings: sql<number>`count(*)::int`,
+        averageRating: sql<number>`round(avg(${recipeRatings.stars})::numeric, 1)::float`,
+      })
+      .from(recipeRatings)
+      .where(eq(recipeRatings.recipeId, recipeId));
+
+    // Get distribution
+    const distribution = await db
+      .select({
+        stars: recipeRatings.stars,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(recipeRatings)
+      .where(eq(recipeRatings.recipeId, recipeId))
+      .groupBy(recipeRatings.stars);
+
+    // Create distribution object
+    const ratingDistribution: Record<string, number> = {
+      '1': 0,
+      '2': 0,
+      '3': 0,
+      '4': 0,
+      '5': 0,
+    };
+
+    distribution.forEach((d) => {
+      ratingDistribution[d.stars.toString()] = d.count;
+    });
+
+    return c.json({
+      success: true,
+      data: {
+        recipe_id: recipeId,
+        average_rating: stats.averageRating || 0,
+        total_ratings: stats.totalRatings || 0,
+        rating_distribution: ratingDistribution,
+      },
+    });
+  } catch (error) {
+    console.error('Get aggregate ratings error:', error);
+    return c.json(
+      {
+        success: false,
+        error: 'Failed to fetch aggregate ratings',
+      },
+      500
+    );
+  }
+});
+
+// DELETE /api/recipes/:recipeId/ratings/:ratingId - Delete a rating
+app.delete('/:recipeId/ratings/:ratingId', requireAuth, async (c) => {
+  const recipeId = parseInt(c.req.param('recipeId'));
+  const ratingId = parseInt(c.req.param('ratingId'));
+
+  if (isNaN(recipeId) || isNaN(ratingId)) {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid recipe ID or rating ID',
+      },
+      400
+    );
+  }
+
+  try {
+    const authUser = c.get('user') as AuthUser;
+
+    // Check if rating exists and belongs to user
+    const [rating] = await db
+      .select()
+      .from(recipeRatings)
+      .where(
+        and(
+          eq(recipeRatings.id, ratingId),
+          eq(recipeRatings.recipeId, recipeId),
+          eq(recipeRatings.userId, authUser.uid)
+        )
+      )
+      .limit(1);
+
+    if (!rating) {
+      return c.json(
+        {
+          success: false,
+          error: 'Rating not found or you do not have permission to delete it',
+        },
+        404
+      );
+    }
+
+    // Delete rating
+    await db
+      .delete(recipeRatings)
+      .where(eq(recipeRatings.id, ratingId));
+
+    return c.json({
+      success: true,
+      message: 'Rating deleted successfully',
+    });
+  } catch (error) {
+    console.error('Delete rating error:', error);
+    return c.json(
+      {
+        success: false,
+        error: 'Failed to delete rating',
+      },
+      500
+    );
+  }
+});
 
 export default app;

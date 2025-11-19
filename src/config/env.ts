@@ -5,6 +5,9 @@ import { resolve } from 'path';
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   OPENAI_API_KEY: z.string().optional(), // Optional for LM Studio usage
+  FIREBASE_PROJECT_ID: z.string().min(1, 'FIREBASE_PROJECT_ID is required'),
+  FIREBASE_CLIENT_EMAIL: z.string().min(1, 'FIREBASE_CLIENT_EMAIL is required'),
+  FIREBASE_PRIVATE_KEY: z.string().min(1, 'FIREBASE_PRIVATE_KEY is required'),
   PORT: z.string().default('3000'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });
@@ -59,6 +62,9 @@ function loadEnv() {
   return {
     DATABASE_URL: envLocal.DATABASE_URL || envFile.DATABASE_URL || process.env.DATABASE_URL,
     OPENAI_API_KEY: envLocal.OPENAI_API_KEY || envFile.OPENAI_API_KEY || process.env.OPENAI_API_KEY,
+    FIREBASE_PROJECT_ID: envLocal.FIREBASE_PROJECT_ID || envFile.FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID,
+    FIREBASE_CLIENT_EMAIL: envLocal.FIREBASE_CLIENT_EMAIL || envFile.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_CLIENT_EMAIL,
+    FIREBASE_PRIVATE_KEY: envLocal.FIREBASE_PRIVATE_KEY || envFile.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY,
     PORT: envLocal.PORT || envFile.PORT || process.env.PORT,
     NODE_ENV: envLocal.NODE_ENV || envFile.NODE_ENV || process.env.NODE_ENV,
   };

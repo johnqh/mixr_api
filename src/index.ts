@@ -10,6 +10,7 @@ import equipmentRoutes from './routes/equipment';
 import ingredientsRoutes from './routes/ingredients';
 import moodsRoutes from './routes/moods';
 import recipesRoutes from './routes/recipes';
+import usersRoutes from './routes/users';
 
 const app = new Hono();
 
@@ -50,6 +51,7 @@ app.route('/api/equipment', equipmentRoutes);
 app.route('/api/ingredients', ingredientsRoutes);
 app.route('/api/moods', moodsRoutes);
 app.route('/api/recipes', recipesRoutes);
+app.route('/api/users', usersRoutes);
 
 // 404 handler
 app.notFound((c) => {
@@ -89,9 +91,24 @@ Available endpoints:
   GET    /api/moods
   GET    /api/moods/:id
 
-  POST   /api/recipes/generate
+  POST   /api/recipes/generate (🔐 auth required)
   GET    /api/recipes
   GET    /api/recipes/:id
+  POST   /api/recipes/:id/ratings (🔐 auth required)
+  GET    /api/recipes/:id/ratings
+  GET    /api/recipes/:id/ratings/aggregate
+  DELETE /api/recipes/:recipeId/ratings/:ratingId (🔐 auth required)
+
+  GET    /api/users/me (🔐 auth required)
+  PUT    /api/users/me (🔐 auth required)
+  GET    /api/users/me/preferences (🔐 auth required)
+  PUT    /api/users/me/preferences (🔐 auth required)
+  GET    /api/users/me/recipes (🔐 auth required)
+  GET    /api/users/me/favorites (🔐 auth required)
+  POST   /api/users/me/favorites (🔐 auth required)
+  DELETE /api/users/me/favorites/:recipeId (🔐 auth required)
+
+🔐 = Requires Firebase authentication token
 
 Ready to mix some cocktails! 🎉
 `);
