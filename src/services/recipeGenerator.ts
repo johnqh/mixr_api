@@ -1,9 +1,12 @@
 import OpenAI from 'openai';
 import { env } from '../config/env';
 
+// Configure OpenAI client based on whether LLM Studio endpoint is set
 const openai = new OpenAI({
-  apiKey: env.OPENAI_API_KEY || 'lm-studio', // LM Studio doesn't require a real API key
-  baseURL: 'http://localhost:1234/v1',
+  apiKey: env.LLM_STUDIO_ENDPOINT
+    ? 'lm-studio' // LLM Studio doesn't require a real API key
+    : env.OPENAI_API_KEY, // Use OpenAI API key if no LLM Studio endpoint
+  baseURL: env.LLM_STUDIO_ENDPOINT || undefined, // Use LLM Studio endpoint if set, otherwise use default OpenAI endpoint
 });
 
 interface GenerateRecipeParams {
@@ -72,8 +75,13 @@ Return your response in the following JSON format:
 Ensure the cocktail is creative, delicious, and perfectly matches the ${moodName} mood.`;
 
   try {
+    // Use different model based on whether LLM Studio endpoint is configured
+    const model = env.LLM_STUDIO_ENDPOINT
+      ? 'qwen-32b-everything' // LLM Studio model
+      : 'gpt-4'; // OpenAI model
+
     const completion = await openai.chat.completions.create({
-      model: 'qwen-32b-everything', // Using LM Studio model
+      model,
       messages: [
         {
           role: 'system',
