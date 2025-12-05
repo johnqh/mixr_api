@@ -2,7 +2,7 @@ import { test, expect, beforeAll, afterAll, describe } from 'bun:test';
 import { db, users, userPreferences, recipes, recipeRatings, userFavorites } from './db';
 import { eq, inArray } from 'drizzle-orm';
 
-const API_URL = 'http://localhost:3000';
+const API_URL = 'http://localhost:6174';
 
 /**
  * IMPORTANT: To run these tests, you need to:

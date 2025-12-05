@@ -2,7 +2,7 @@ import { test, expect, beforeAll, afterAll } from 'bun:test';
 import { db, equipment, ingredients, moods } from './db';
 import { eq, inArray } from 'drizzle-orm';
 
-const API_URL = 'http://localhost:3000';
+const API_URL = 'http://localhost:6174';
 
 // Helper to wait for server to be ready
 async function waitForServer(maxAttempts = 10) {

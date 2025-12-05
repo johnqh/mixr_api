@@ -162,14 +162,14 @@ bun test src/auth.integration.test.ts
 ```bash
 # Get current user
 curl -H "Authorization: Bearer $TOKEN" \
-  http://localhost:3000/api/users/me
+  http://localhost:6174/api/users/me
 
 # Update profile
 curl -X PUT \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"display_name": "John Doe"}' \
-  http://localhost:3000/api/users/me
+  http://localhost:6174/api/users/me
 ```
 
 ### Preferences
@@ -179,7 +179,7 @@ curl -X PUT \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"equipment_ids": [1,2,3], "ingredient_ids": [10,15,20]}' \
-  http://localhost:3000/api/users/me/preferences
+  http://localhost:6174/api/users/me/preferences
 ```
 
 ### Recipe Generation (with Auth)
@@ -189,7 +189,7 @@ curl -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"mood_id": 1, "equipment_ids": [1,2], "ingredient_ids": [10,15]}' \
-  http://localhost:3000/api/recipes/generate
+  http://localhost:6174/api/recipes/generate
 ```
 
 ### Ratings
@@ -199,18 +199,18 @@ curl -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"stars": 5, "review": "Amazing cocktail!"}' \
-  http://localhost:3000/api/recipes/123/ratings
+  http://localhost:6174/api/recipes/123/ratings
 
 # Get ratings
-curl http://localhost:3000/api/recipes/123/ratings?limit=10&sort=newest
+curl http://localhost:6174/api/recipes/123/ratings?limit=10&sort=newest
 
 # Get aggregate
-curl http://localhost:3000/api/recipes/123/ratings/aggregate
+curl http://localhost:6174/api/recipes/123/ratings/aggregate
 
 # Delete own rating
 curl -X DELETE \
   -H "Authorization: Bearer $TOKEN" \
-  http://localhost:3000/api/recipes/123/ratings/456
+  http://localhost:6174/api/recipes/123/ratings/456
 ```
 
 ### Favorites
@@ -220,16 +220,16 @@ curl -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"recipe_id": 123}' \
-  http://localhost:3000/api/users/me/favorites
+  http://localhost:6174/api/users/me/favorites
 
 # Get favorites
 curl -H "Authorization: Bearer $TOKEN" \
-  http://localhost:3000/api/users/me/favorites
+  http://localhost:6174/api/users/me/favorites
 
 # Remove from favorites
 curl -X DELETE \
   -H "Authorization: Bearer $TOKEN" \
-  http://localhost:3000/api/users/me/favorites/123
+  http://localhost:6174/api/users/me/favorites/123
 ```
 
 ## Frontend Integration Checklist
@@ -272,7 +272,7 @@ FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY----
 DATABASE_URL=postgresql://user:pass@localhost:5432/mixr_db
 
 # Server
-PORT=3000
+PORT=6174
 NODE_ENV=development
 ```
 

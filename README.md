@@ -56,7 +56,7 @@ Edit `.env.local` with your actual credentials:
 ```env
 DATABASE_URL=postgresql://username:password@localhost:5432/mixr_db
 OPENAI_API_KEY=your_openai_api_key_here
-PORT=3000
+PORT=6174
 NODE_ENV=development
 ```
 
@@ -83,7 +83,7 @@ Start the development server with hot reload:
 bun run dev
 ```
 
-The API will be available at `http://localhost:3000`
+The API will be available at `http://localhost:6174`
 
 ## Production
 

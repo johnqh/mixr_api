@@ -12,7 +12,7 @@ if [ ! -f .env ]; then
 fi
 
 # Check if server is already running
-if curl -s http://localhost:3000/health > /dev/null 2>&1; then
+if curl -s http://localhost:6174/health > /dev/null 2>&1; then
   echo "✅ Server is already running"
   echo ""
   echo "Running integration tests..."
@@ -21,7 +21,7 @@ if curl -s http://localhost:3000/health > /dev/null 2>&1; then
   exit $?
 fi
 
-echo "⚠️  Server is not running on localhost:3000"
+echo "⚠️  Server is not running on localhost:6174"
 echo ""
 echo "To run integration tests, you need to:"
 echo "1. Start the server in one terminal: bun run dev"
@@ -40,7 +40,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
   # Wait for server to be ready
   echo "⏳ Waiting for server to be ready..."
   for i in {1..30}; do
-    if curl -s http://localhost:3000/health > /dev/null 2>&1; then
+    if curl -s http://localhost:6174/health > /dev/null 2>&1; then
       echo "✅ Server is ready!"
       break
     fi
