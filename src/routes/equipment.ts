@@ -24,7 +24,7 @@ app.get('/', async (c) => {
       data: results,
       count: results.length,
     });
-  } catch (error) {
+  } catch (_error) {
     return c.json(
       {
         success: false,
@@ -80,7 +80,7 @@ app.get('/:id', async (c) => {
       success: true,
       data: result[0],
     });
-  } catch (error) {
+  } catch (_error) {
     return c.json(
       {
         success: false,

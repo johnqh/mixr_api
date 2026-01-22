@@ -26,7 +26,7 @@ if (hasValidFirebaseConfig && !admin.apps.length) {
     firebaseAuth = admin.auth();
     firebaseInitialized = true;
     console.log('✅ Firebase Admin initialized successfully');
-  } catch (error) {
+  } catch (_error) {
     console.warn('⚠️  Firebase initialization failed. Running in development mode without authentication.');
     console.warn('   To enable authentication, configure valid Firebase credentials in .env.local');
   }

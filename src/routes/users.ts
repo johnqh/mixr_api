@@ -1,9 +1,13 @@
 import { Hono } from 'hono';
 import { eq, desc, and } from 'drizzle-orm';
 import { db, users, userPreferences, recipes, userFavorites, recipeIngredients, recipeSteps, recipeEquipment, equipment, ingredients, moods } from '../db';
-import { requireAuth, AuthUser } from '../middleware/auth';
+import { requireAuth, type AuthUser } from '../middleware/auth';
 
-const app = new Hono();
+type Variables = {
+  user: AuthUser;
+};
+
+const app = new Hono<{ Variables: Variables }>();
 
 // Apply auth middleware to all /me routes
 app.use('/me/*', requireAuth);
