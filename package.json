@@ -1,6 +1,6 @@
 {
   "name": "mixr_api",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "module": "src/index.ts",
   "type": "module",
   "private": true,
@@ -38,6 +38,8 @@
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.4",
+    "@sudobility/mixr_types": "link:@sudobility/mixr_types",
+    "@sudobility/types": "^1.9.48",
     "drizzle-orm": "^0.44.6",
     "firebase-admin": "^13.6.0",
     "hono": "^4.9.12",

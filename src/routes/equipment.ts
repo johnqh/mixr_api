@@ -1,12 +1,13 @@
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
 import { db, equipment } from '../db';
+import { EQUIPMENT_SUBCATEGORIES, type EquipmentSubcategory } from '@sudobility/mixr_types';
 
 const app = new Hono();
 
 // Get all equipment or filter by subcategory
 app.get('/', async (c) => {
-  const subcategory = c.req.query('subcategory');
+  const subcategory = c.req.query('subcategory') as EquipmentSubcategory | undefined;
 
   try {
     let results;
@@ -14,7 +15,7 @@ app.get('/', async (c) => {
       results = await db
         .select()
         .from(equipment)
-        .where(eq(equipment.subcategory, subcategory as any));
+        .where(eq(equipment.subcategory, subcategory));
     } else {
       results = await db.select().from(equipment);
     }
@@ -37,11 +38,9 @@ app.get('/', async (c) => {
 
 // Get equipment subcategories
 app.get('/subcategories', async (c) => {
-  const subcategories = ['essential', 'glassware', 'garnish', 'advanced'];
-
   return c.json({
     success: true,
-    data: subcategories,
+    data: EQUIPMENT_SUBCATEGORIES,
   });
 });
 

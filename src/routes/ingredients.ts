@@ -1,12 +1,13 @@
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
 import { db, ingredients } from '../db';
+import { INGREDIENT_SUBCATEGORIES, type IngredientSubcategory } from '@sudobility/mixr_types';
 
 const app = new Hono();
 
 // Get all ingredients or filter by subcategory
 app.get('/', async (c) => {
-  const subcategory = c.req.query('subcategory');
+  const subcategory = c.req.query('subcategory') as IngredientSubcategory | undefined;
 
   try {
     let results;
@@ -14,7 +15,7 @@ app.get('/', async (c) => {
       results = await db
         .select()
         .from(ingredients)
-        .where(eq(ingredients.subcategory, subcategory as any));
+        .where(eq(ingredients.subcategory, subcategory));
     } else {
       results = await db.select().from(ingredients);
     }
@@ -37,11 +38,9 @@ app.get('/', async (c) => {
 
 // Get ingredient subcategories
 app.get('/subcategories', async (c) => {
-  const subcategories = ['spirit', 'wine', 'other_alcohol', 'fruit', 'spice', 'other'];
-
   return c.json({
     success: true,
-    data: subcategories,
+    data: INGREDIENT_SUBCATEGORIES,
   });
 });
 
