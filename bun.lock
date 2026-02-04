@@ -5,8 +5,8 @@
       "name": "mixr_api",
       "dependencies": {
         "@hono/zod-validator": "^0.7.4",
-        "@sudobility/mixr_types": "^0.0.6",
-        "@sudobility/types": "^1.9.49",
+        "@sudobility/mixr_types": "^0.0.7",
+        "@sudobility/types": "^1.9.50",
         "drizzle-orm": "^0.44.6",
         "firebase-admin": "^13.6.0",
         "hono": "^4.9.12",
@@ -232,9 +232,9 @@
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
-    "@sudobility/mixr_types": ["@sudobility/mixr_types@0.0.6", "", { "peerDependencies": { "@sudobility/types": "^1.9.49" } }, "sha512-+ELQJZlOuQo7phA/3/2LY4gSNbpgCxv2mm4BKDyMnJRpdwYa3i/gvA01OI9eM/R6H5DymdiUQrv9I3Wivkci5w=="],
+    "@sudobility/mixr_types": ["@sudobility/mixr_types@0.0.7", "", { "peerDependencies": { "@sudobility/types": "^1.9.50" } }, "sha512-r9w6QfNYY1bkWf+22ODm7N7X/xyp9YDtYupLCkGA0VfvJSiq6hSh3Lk4lClEC/W7gFYJaS7QxbMf6Kq5Jjm5cA=="],
 
-    "@sudobility/types": ["@sudobility/types@1.9.49", "", {}, "sha512-Gt8kaxnL5uWDsIAW1A6vKKvDUopb+q3QeyuUirVnT7yyqaMKXmcqvAGupvvZ/ATr2bOckcSPns/Bz3lRT1GVTg=="],
+    "@sudobility/types": ["@sudobility/types@1.9.50", "", {}, "sha512-SKopIMJqgNVopcz/MNukrm936yKuBJMFcz4uUbQz9XB7cDjyuExoVeyMnvidMKtOLkmJSRdYYV4+M7eG7KN2aw=="],
 
     "@tootallnate/once": ["@tootallnate/once@2.0.0", "", {}, "sha512-XCuKFP5PS55gnMVu3dty8KPatLqUoy/ZYzDzAGCQ8JNFCkLXzmI7vNHCR+XpbZaMWQK/vQubr7PkYq8g470J/A=="],
 
