@@ -5,7 +5,10 @@ import { EQUIPMENT_SUBCATEGORIES, type EquipmentSubcategory } from '@sudobility/
 
 const app = new Hono();
 
-// Get all equipment or filter by subcategory
+/**
+ * GET /api/equipment
+ * List all equipment, optionally filtered by subcategory query parameter.
+ */
 app.get('/', async (c) => {
   const subcategory = c.req.query('subcategory') as EquipmentSubcategory | undefined;
 
@@ -36,7 +39,10 @@ app.get('/', async (c) => {
   }
 });
 
-// Get equipment subcategories
+/**
+ * GET /api/equipment/subcategories
+ * List all valid equipment subcategory values.
+ */
 app.get('/subcategories', async (c) => {
   return c.json({
     success: true,
@@ -44,7 +50,10 @@ app.get('/subcategories', async (c) => {
   });
 });
 
-// Get equipment by ID
+/**
+ * GET /api/equipment/:id
+ * Get a single equipment item by ID.
+ */
 app.get('/:id', async (c) => {
   const id = parseInt(c.req.param('id'));
 

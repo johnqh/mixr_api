@@ -2,54 +2,99 @@
 
 ## Priority 1 - High Impact
 
-### 1. Add Zod Request Validation to All Route Handlers
-- Route handlers parse request bodies with `c.req.json()` and then manually validate fields with `if` statements (e.g., `if (!stars || typeof stars !== 'number' || stars < 1 || stars > 5)`).
-- The `/generate` route has ~30 lines of manual validation. The `/:id/ratings` POST has ~15 lines. This is error-prone and inconsistent.
-- Zod is already a dependency (used in `src/config/env.ts`) and should be used for request body validation with `.safeParse()`, providing automatic error messages and type narrowing.
-- Validation schemas could be shared with `mixr_types` if Zod schemas are added there, creating a single source of truth.
+### 1. Add Zod Request Validation to All Route Handlers ✅
 
-### 2. Replace Placeholder Unit Tests with Real Test Coverage
-- The only unit test is `tests/unit/placeholder.test.ts`. Integration tests exist but require a running database.
-- Route handlers contain significant business logic (recipe generation orchestration, rating upsert, user auto-creation, pagination) that should have unit tests with mocked database calls.
-- `recipeGenerator.ts` (AI service) has no tests -- at minimum, prompt construction and response parsing should be tested with mocked OpenAI responses.
-- `errorHandler.ts` and `auth.ts` middleware should have unit tests covering all branches (HTTPException vs generic Error, dev mode vs production, missing/invalid/expired tokens).
+**Status: Completed**
 
-### 3. Fix N+1 Query Problem in Recipe List Endpoint
-- The `GET /api/recipes` endpoint fetches all recipes, then calls `getCompleteRecipe()` for each one in a `Promise.all` loop.
-- `getCompleteRecipe()` makes 4 separate database queries per recipe (recipe, mood, ingredients, steps+equipment).
-- For a page of 10 recipes, this results in 1 + (10 x 4) = 41 database queries. This will degrade significantly as recipe count grows.
-- The queries should be batched: fetch all moods, all recipe_ingredients, all recipe_steps, and all recipe_equipment for the recipe ID set in a single query each, then assemble in-memory.
+- Created `src/validation/schemas.ts` with Zod schemas for all request bodies and query parameters: `generateRecipeSchema`, `submitRatingSchema`, `updateUserSchema`, `updatePreferencesSchema`, `addFavoriteSchema`, `paginationSchema`, `ratingsQuerySchema`.
+- Replaced all manual `if`/`typeof` validation in `routes/recipes.ts` and `routes/users.ts` with `.safeParse()` calls.
+- Error messages are now auto-generated from Zod and consistently formatted.
+- Inferred TypeScript types are exported alongside schemas.
+
+### 2. Replace Placeholder Unit Tests with Real Test Coverage ✅
+
+**Status: Completed**
+
+- Added `tests/unit/recipeGenerator.test.ts` (17 tests): covers `extractJson`, `parseRecipeResponse`, and `buildRecipePrompt` pure functions.
+- Added `tests/unit/validation.test.ts` (33 tests): covers all Zod schemas with valid/invalid inputs, edge cases, coercion, and defaults.
+- Added `tests/unit/errorHandler.test.ts` (4 tests): covers `HTTPException` handling, generic error handling, and secret leakage prevention.
+- Extracted pure functions from `recipeGenerator.ts` into `recipeParser.ts` to enable testing without env/OpenAI dependencies.
+- Total: 55 unit tests passing (up from 1 placeholder).
+
+### 3. Fix N+1 Query Problem in Recipe List Endpoint ✅
+
+**Status: Completed**
+
+- Added `getCompleteRecipes()` batch function in both `routes/recipes.ts` and `routes/users.ts`.
+- For a page of 10 recipes, queries dropped from 41 (1 + 10x4) to 5 (recipes + moods + ingredients + steps + equipment) using `inArray()` batch fetches.
+- Results are grouped by recipe ID in-memory using `Map` structures.
+- Applied to `GET /api/recipes`, `GET /api/users/me/recipes`, and `GET /api/users/me/favorites`.
 
 ## Priority 2 - Medium Impact
 
 ### 4. Add Rate Limiting Middleware
+
+**Status: Deferred** -- Requires Redis or persistent store for production-grade rate limiting. In-memory rate limiting is not suitable for multi-instance deployments.
+
 - The API has no rate limiting. The `/api/recipes/generate` endpoint calls OpenAI which has both cost and rate implications.
 - Unauthenticated endpoints (`GET /api/equipment`, `GET /api/recipes`, etc.) are open to abuse.
 - Hono has `hono/rate-limiter` or a simple in-memory/Redis-based rate limiter could be added, especially for the generation endpoint.
 
-### 5. Improve Recipe Generation Resilience
-- `recipeGenerator.ts` does `JSON.parse(content)` on the raw LLM response with no safety parsing (e.g., stripping markdown code fences, handling partial JSON).
-- The model name is hardcoded (`'gpt-4'` or `'qwen-32b-everything'`) with no fallback if the model is unavailable.
-- The function catches all errors and re-throws a generic `'Failed to generate recipe'`, losing the original error context (was it a JSON parse error? An API timeout? Rate limit?).
-- LLM Studio does not support `response_format: { type: 'json_object' }` -- adding a JSON extraction regex fallback would improve reliability with local models.
+### 5. Improve Recipe Generation Resilience ✅
 
-### 6. Add Database Transaction for Recipe Creation
-- The `POST /generate` route inserts into 4 tables sequentially (`recipes`, `recipe_ingredients`, `recipe_steps`, `recipe_equipment`) without a transaction.
-- If an insert fails partway through, orphaned data is left in the database (e.g., a recipe with no steps).
-- Wrapping the multi-table insert in a Drizzle transaction (`db.transaction(async (tx) => { ... })`) would ensure atomicity.
+**Status: Completed**
+
+- Created `src/services/recipeParser.ts` with pure utility functions for JSON extraction and response parsing.
+- `extractJson()` handles markdown code fences (`\`\`\`json`), bare fences, and JSON embedded in surrounding text.
+- `parseRecipeResponse()` provides specific error messages for each missing field instead of a generic "Invalid recipe format".
+- Error context is preserved: API errors, JSON parse errors, and validation errors each throw with distinct messages.
+- `generateRecipe()` now separates API call errors from parsing errors for clearer debugging.
+
+### 6. Add Database Transaction for Recipe Creation ✅
+
+**Status: Completed**
+
+- Wrapped the 4-table insert (`recipes`, `recipe_ingredients`, `recipe_steps`, `recipe_equipment`) in `db.transaction()` in `POST /generate`.
+- If any insert fails, all changes are rolled back -- no more orphaned recipes without steps/ingredients.
+- Also converted sequential per-row inserts to batch `insert().values([...])` calls within the transaction for fewer round trips.
 
 ## Priority 3 - Nice to Have
 
 ### 7. Add Structured Logging
+
+**Status: Deferred** -- Requires adding a new dependency (pino) and restructuring all log calls. Better done as a dedicated effort.
+
 - Current logging uses `console.log` and `console.error` with no structured format.
 - Adding a logger (e.g., `pino` or Hono's built-in logger with custom format) with request IDs, user IDs, and operation context would improve debugging and monitoring.
 - Error logs in catch blocks (e.g., `console.error('Recipe generation error:', error)`) should include request context.
 
 ### 8. Add OpenAPI/Swagger Documentation
+
+**Status: Deferred** -- Major architectural addition requiring `@hono/zod-openapi` migration. Better done after all Zod schemas are stabilized.
+
 - The API has 20+ endpoints documented only in `CLAUDE.md` and the startup console output.
 - Hono supports OpenAPI spec generation via `@hono/zod-openapi`, which could auto-generate interactive API docs from Zod schemas (if added per improvement #1).
 - This would also enable auto-generated client types, reducing the manual type maintenance burden in `mixr_types`.
 
-### 9. Tighten CORS Configuration
-- CORS is configured as `origin: '*'`, allowing any domain to make authenticated requests.
-- In production, this should be restricted to the actual frontend domain(s) to prevent CSRF-style attacks on authenticated endpoints.
+### 9. Tighten CORS Configuration ✅
+
+**Status: Completed**
+
+- Added `CORS_ORIGINS` env var to `src/config/env.ts` (optional, comma-separated list of allowed origins).
+- `src/index.ts` now reads `CORS_ORIGINS` and passes it to `cors()` middleware. Defaults to `'*'` when not set (development behavior).
+- In production, set `CORS_ORIGINS=https://app.mixr.com,https://mixr.com` to restrict access.
+
+## Additional Improvements Made
+
+### JSDoc Documentation
+- Added JSDoc comments to all route handlers, middleware functions, service functions, and exported interfaces across all modified files.
+- Documents parameters, return values, error conditions, and behavioral notes.
+
+### Code Organization
+- Extracted pure functions (`extractJson`, `parseRecipeResponse`, `buildRecipePrompt`) into `src/services/recipeParser.ts` for testability.
+- `recipeGenerator.ts` re-exports all types and functions from `recipeParser.ts` for backward-compatible imports.
+- Created `src/validation/schemas.ts` as a centralized location for all request validation schemas.
+
+### Batch Inserts in Recipe Creation
+- Converted sequential single-row inserts for ingredients, steps, and equipment into batch `insert().values([...])` calls.
+- Reduces database round trips from N inserts to 3 batch inserts during recipe creation.

@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, inArray } from 'drizzle-orm';
 import { db, users, userPreferences, recipes, userFavorites, recipeIngredients, recipeSteps, recipeEquipment, equipment, ingredients, moods } from '../db';
 import { requireAuth, type AuthUser } from '../middleware/auth';
+import { updateUserSchema, updatePreferencesSchema, addFavoriteSchema, paginationSchema } from '../validation/schemas';
 
 type Variables = {
   user: AuthUser;
@@ -12,23 +13,24 @@ const app = new Hono<{ Variables: Variables }>();
 // Apply auth middleware to all /me routes
 app.use('/me/*', requireAuth);
 
-// Helper function to get or create user
+/**
+ * Get or create a user record from the auth token.
+ * Auto-creates on first API call using Firebase UID and email.
+ */
 async function getOrCreateUser(authUser: AuthUser) {
-  // Check if user exists
   let [user] = await db
     .select()
     .from(users)
     .where(eq(users.id, authUser.uid))
     .limit(1);
 
-  // Create user if doesn't exist
   if (!user && authUser.email) {
     [user] = await db
       .insert(users)
       .values({
         id: authUser.uid,
         email: authUser.email,
-        displayName: authUser.email.split('@')[0], // Default display name from email
+        displayName: authUser.email.split('@')[0],
       })
       .returning();
   }
@@ -36,33 +38,26 @@ async function getOrCreateUser(authUser: AuthUser) {
   return user;
 }
 
-// Helper function to get complete recipe with all relations
-async function getCompleteRecipe(recipeId: number) {
-  const [recipe] = await db
-    .select()
-    .from(recipes)
-    .where(eq(recipes.id, recipeId))
-    .limit(1);
+/**
+ * Batch-fetch complete recipes with all relations.
+ * Uses IN queries instead of per-recipe queries to avoid N+1.
+ */
+async function getCompleteRecipes(recipeList: (typeof recipes.$inferSelect)[]) {
+  if (recipeList.length === 0) return [];
 
-  if (!recipe) {
-    return null;
-  }
+  const recipeIds = recipeList.map((r) => r.id);
 
-  // Get mood
-  let mood = null;
-  if (recipe.moodId) {
-    const [moodData] = await db
-      .select()
-      .from(moods)
-      .where(eq(moods.id, recipe.moodId))
-      .limit(1);
-    mood = moodData || null;
-  }
+  // Batch fetch moods
+  const moodIds = [...new Set(recipeList.map((r) => r.moodId).filter((id): id is number => id !== null))];
+  const moodsData = moodIds.length > 0
+    ? await db.select().from(moods).where(inArray(moods.id, moodIds))
+    : [];
+  const moodMap = new Map(moodsData.map((m) => [m.id, m]));
 
-  // Get ingredients
-  const recipeIngredientsData = await db
+  // Batch fetch ingredients
+  const allIngredients = await db
     .select({
-      id: recipeIngredients.id,
+      recipeId: recipeIngredients.recipeId,
       amount: recipeIngredients.amount,
       ingredientId: ingredients.id,
       ingredientName: ingredients.name,
@@ -70,46 +65,71 @@ async function getCompleteRecipe(recipeId: number) {
     })
     .from(recipeIngredients)
     .innerJoin(ingredients, eq(recipeIngredients.ingredientId, ingredients.id))
-    .where(eq(recipeIngredients.recipeId, recipeId));
+    .where(inArray(recipeIngredients.recipeId, recipeIds));
 
-  // Get steps
-  const steps = await db
+  // Batch fetch steps
+  const allSteps = await db
     .select()
     .from(recipeSteps)
-    .where(eq(recipeSteps.recipeId, recipeId))
-    .orderBy(recipeSteps.stepNumber);
+    .where(inArray(recipeSteps.recipeId, recipeIds))
+    .orderBy(recipeSteps.recipeId, recipeSteps.stepNumber);
 
-  // Get equipment
-  const recipeEquipmentData = await db
+  // Batch fetch equipment
+  const allEquipment = await db
     .select({
-      id: recipeEquipment.id,
+      recipeId: recipeEquipment.recipeId,
       equipmentId: equipment.id,
       equipmentName: equipment.name,
       equipmentIcon: equipment.icon,
     })
     .from(recipeEquipment)
     .innerJoin(equipment, eq(recipeEquipment.equipmentId, equipment.id))
-    .where(eq(recipeEquipment.recipeId, recipeId));
+    .where(inArray(recipeEquipment.recipeId, recipeIds));
 
-  return {
+  // Group by recipe ID
+  const ingredientsByRecipe = new Map<number, typeof allIngredients>();
+  for (const ing of allIngredients) {
+    const list = ingredientsByRecipe.get(ing.recipeId) || [];
+    list.push(ing);
+    ingredientsByRecipe.set(ing.recipeId, list);
+  }
+
+  const stepsByRecipe = new Map<number, typeof allSteps>();
+  for (const step of allSteps) {
+    const list = stepsByRecipe.get(step.recipeId) || [];
+    list.push(step);
+    stepsByRecipe.set(step.recipeId, list);
+  }
+
+  const equipmentByRecipe = new Map<number, typeof allEquipment>();
+  for (const eq of allEquipment) {
+    const list = equipmentByRecipe.get(eq.recipeId) || [];
+    list.push(eq);
+    equipmentByRecipe.set(eq.recipeId, list);
+  }
+
+  return recipeList.map((recipe) => ({
     ...recipe,
-    mood,
-    ingredients: recipeIngredientsData.map((ri) => ({
+    mood: recipe.moodId ? moodMap.get(recipe.moodId) || null : null,
+    ingredients: (ingredientsByRecipe.get(recipe.id) || []).map((ri) => ({
       id: ri.ingredientId,
       name: ri.ingredientName,
       icon: ri.ingredientIcon,
       amount: ri.amount,
     })),
-    steps: steps.map((s) => s.instruction),
-    equipment: recipeEquipmentData.map((re) => ({
+    steps: (stepsByRecipe.get(recipe.id) || []).map((s) => s.instruction),
+    equipment: (equipmentByRecipe.get(recipe.id) || []).map((re) => ({
       id: re.equipmentId,
       name: re.equipmentName,
       icon: re.equipmentIcon,
     })),
-  };
+  }));
 }
 
-// GET /api/users/me - Get current user's profile
+/**
+ * GET /api/users/me
+ * Get current user's profile. Auto-creates user on first call.
+ */
 app.get('/me', async (c) => {
   try {
     const authUser = c.get('user') as AuthUser;
@@ -147,22 +167,28 @@ app.get('/me', async (c) => {
   }
 });
 
-// PUT /api/users/me - Update current user's profile
+/**
+ * PUT /api/users/me
+ * Update current user's display name.
+ */
 app.put('/me', async (c) => {
   try {
     const authUser = c.get('user') as AuthUser;
     const body = await c.req.json();
-    const { display_name } = body;
 
-    if (!display_name || typeof display_name !== 'string') {
+    // Validate request body with Zod
+    const parsed = updateUserSchema.safeParse(body);
+    if (!parsed.success) {
       return c.json(
         {
           success: false,
-          error: 'display_name is required and must be a string',
+          error: parsed.error.issues.map((i) => i.message).join('; '),
         },
         400
       );
     }
+
+    const { display_name } = parsed.data;
 
     // Ensure user exists
     await getOrCreateUser(authUser);
@@ -199,7 +225,10 @@ app.put('/me', async (c) => {
   }
 });
 
-// GET /api/users/me/preferences - Get user preferences
+/**
+ * GET /api/users/me/preferences
+ * Get user's equipment and ingredient preference IDs.
+ */
 app.get('/me/preferences', async (c) => {
   try {
     const authUser = c.get('user') as AuthUser;
@@ -214,7 +243,6 @@ app.get('/me/preferences', async (c) => {
       .limit(1);
 
     if (!prefs) {
-      // Return empty preferences if not set
       return c.json({
         success: true,
         data: {
@@ -245,23 +273,28 @@ app.get('/me/preferences', async (c) => {
   }
 });
 
-// PUT /api/users/me/preferences - Update user preferences
+/**
+ * PUT /api/users/me/preferences
+ * Update user's equipment and ingredient preferences (upsert).
+ */
 app.put('/me/preferences', async (c) => {
   try {
     const authUser = c.get('user') as AuthUser;
     const body = await c.req.json();
-    const { equipment_ids, ingredient_ids } = body;
 
-    // Validate input
-    if (!Array.isArray(equipment_ids) || !Array.isArray(ingredient_ids)) {
+    // Validate request body with Zod
+    const parsed = updatePreferencesSchema.safeParse(body);
+    if (!parsed.success) {
       return c.json(
         {
           success: false,
-          error: 'equipment_ids and ingredient_ids must be arrays',
+          error: parsed.error.issues.map((i) => i.message).join('; '),
         },
         400
       );
     }
+
+    const { equipment_ids, ingredient_ids } = parsed.data;
 
     // Ensure user exists
     await getOrCreateUser(authUser);
@@ -305,12 +338,21 @@ app.put('/me/preferences', async (c) => {
   }
 });
 
-// GET /api/users/me/recipes - Get recipes generated by current user
+/**
+ * GET /api/users/me/recipes
+ * Get recipes generated by the current user with pagination.
+ */
 app.get('/me/recipes', async (c) => {
   try {
     const authUser = c.get('user') as AuthUser;
-    const limit = parseInt(c.req.query('limit') || '20');
-    const offset = parseInt(c.req.query('offset') || '0');
+
+    const query = paginationSchema.safeParse({
+      limit: c.req.query('limit'),
+      offset: c.req.query('offset'),
+    });
+
+    const limit = query.success ? query.data.limit : 20;
+    const offset = query.success ? query.data.offset : 0;
 
     // Ensure user exists
     await getOrCreateUser(authUser);
@@ -323,9 +365,8 @@ app.get('/me/recipes', async (c) => {
       .limit(limit)
       .offset(offset);
 
-    const recipesWithDetails = await Promise.all(
-      userRecipes.map((recipe) => getCompleteRecipe(recipe.id))
-    );
+    // Use batched query to avoid N+1
+    const recipesWithDetails = await getCompleteRecipes(userRecipes);
 
     return c.json({
       success: true,
@@ -344,12 +385,21 @@ app.get('/me/recipes', async (c) => {
   }
 });
 
-// GET /api/users/me/favorites - Get user's favorite recipes
+/**
+ * GET /api/users/me/favorites
+ * Get user's favorite recipes with pagination.
+ */
 app.get('/me/favorites', async (c) => {
   try {
     const authUser = c.get('user') as AuthUser;
-    const limit = parseInt(c.req.query('limit') || '20');
-    const offset = parseInt(c.req.query('offset') || '0');
+
+    const query = paginationSchema.safeParse({
+      limit: c.req.query('limit'),
+      offset: c.req.query('offset'),
+    });
+
+    const limit = query.success ? query.data.limit : 20;
+    const offset = query.success ? query.data.offset : 0;
 
     // Ensure user exists
     await getOrCreateUser(authUser);
@@ -365,14 +415,28 @@ app.get('/me/favorites', async (c) => {
       .limit(limit)
       .offset(offset);
 
-    const recipesWithDetails = await Promise.all(
-      favorites.map((fav) => getCompleteRecipe(fav.recipeId))
-    );
+    if (favorites.length === 0) {
+      return c.json({
+        success: true,
+        data: [],
+        count: 0,
+      });
+    }
+
+    // Fetch the actual recipes
+    const favoriteRecipeIds = favorites.map((f) => f.recipeId);
+    const favoriteRecipes = await db
+      .select()
+      .from(recipes)
+      .where(inArray(recipes.id, favoriteRecipeIds));
+
+    // Use batched query to avoid N+1
+    const recipesWithDetails = await getCompleteRecipes(favoriteRecipes);
 
     return c.json({
       success: true,
-      data: recipesWithDetails.filter((r) => r !== null),
-      count: recipesWithDetails.filter((r) => r !== null).length,
+      data: recipesWithDetails,
+      count: recipesWithDetails.length,
     });
   } catch (error) {
     console.error('Get favorites error:', error);
@@ -386,22 +450,28 @@ app.get('/me/favorites', async (c) => {
   }
 });
 
-// POST /api/users/me/favorites - Add recipe to favorites
+/**
+ * POST /api/users/me/favorites
+ * Add a recipe to the user's favorites.
+ */
 app.post('/me/favorites', async (c) => {
   try {
     const authUser = c.get('user') as AuthUser;
     const body = await c.req.json();
-    const { recipe_id } = body;
 
-    if (!recipe_id || typeof recipe_id !== 'number') {
+    // Validate request body with Zod
+    const parsed = addFavoriteSchema.safeParse(body);
+    if (!parsed.success) {
       return c.json(
         {
           success: false,
-          error: 'recipe_id is required and must be a number',
+          error: parsed.error.issues.map((i) => i.message).join('; '),
         },
         400
       );
     }
+
+    const { recipe_id } = parsed.data;
 
     // Ensure user exists
     await getOrCreateUser(authUser);
@@ -448,7 +518,10 @@ app.post('/me/favorites', async (c) => {
   }
 });
 
-// DELETE /api/users/me/favorites/:recipeId - Remove recipe from favorites
+/**
+ * DELETE /api/users/me/favorites/:recipeId
+ * Remove a recipe from the user's favorites.
+ */
 app.delete('/me/favorites/:recipeId', async (c) => {
   try {
     const authUser = c.get('user') as AuthUser;

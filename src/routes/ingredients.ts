@@ -5,7 +5,10 @@ import { INGREDIENT_SUBCATEGORIES, type IngredientSubcategory } from '@sudobilit
 
 const app = new Hono();
 
-// Get all ingredients or filter by subcategory
+/**
+ * GET /api/ingredients
+ * List all ingredients, optionally filtered by subcategory query parameter.
+ */
 app.get('/', async (c) => {
   const subcategory = c.req.query('subcategory') as IngredientSubcategory | undefined;
 
@@ -36,7 +39,10 @@ app.get('/', async (c) => {
   }
 });
 
-// Get ingredient subcategories
+/**
+ * GET /api/ingredients/subcategories
+ * List all valid ingredient subcategory values.
+ */
 app.get('/subcategories', async (c) => {
   return c.json({
     success: true,
@@ -44,7 +50,10 @@ app.get('/subcategories', async (c) => {
   });
 });
 
-// Get ingredient by ID
+/**
+ * GET /api/ingredients/:id
+ * Get a single ingredient by ID.
+ */
 app.get('/:id', async (c) => {
   const id = parseInt(c.req.param('id'));
 

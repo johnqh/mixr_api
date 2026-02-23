@@ -3,6 +3,7 @@ import { eq, inArray, desc, and, sql } from 'drizzle-orm';
 import { db, equipment, ingredients, moods, recipes, recipeIngredients, recipeSteps, recipeEquipment, users, userPreferences, recipeRatings } from '../db';
 import { generateRecipe } from '../services/recipeGenerator';
 import { requireAuth, type AuthUser } from '../middleware/auth';
+import { generateRecipeSchema, submitRatingSchema, paginationSchema, ratingsQuerySchema } from '../validation/schemas';
 
 type Variables = {
   user: AuthUser;
@@ -10,16 +11,17 @@ type Variables = {
 
 const app = new Hono<{ Variables: Variables }>();
 
-// Helper function to get or create user
+/**
+ * Get or create a user record from the auth token.
+ * Auto-creates on first API call using Firebase UID and email.
+ */
 async function getOrCreateUser(authUser: AuthUser) {
-  // Check if user exists
   let [user] = await db
     .select()
     .from(users)
     .where(eq(users.id, authUser.uid))
     .limit(1);
 
-  // Create user if doesn't exist
   if (!user && authUser.email) {
     [user] = await db
       .insert(users)
@@ -34,19 +36,36 @@ async function getOrCreateUser(authUser: AuthUser) {
   return user;
 }
 
-// Generate a new recipe
+/**
+ * POST /api/recipes/generate
+ * Generate a new AI cocktail recipe based on equipment, ingredients, and mood.
+ * Falls back to user's saved preferences if equipment/ingredient IDs are empty.
+ */
 app.post('/generate', requireAuth, async (c) => {
   try {
     const authUser = c.get('user') as AuthUser;
     const body = await c.req.json();
-    let { equipment_ids, ingredient_ids } = body;
-    const { mood_id } = body;
+
+    // Validate request body with Zod
+    const parsed = generateRecipeSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        {
+          success: false,
+          error: parsed.error.issues.map((i) => i.message).join('; '),
+        },
+        400
+      );
+    }
+
+    let { equipment_ids, ingredient_ids } = parsed.data;
+    const { mood_id } = parsed.data;
 
     // Ensure user exists
     await getOrCreateUser(authUser);
 
     // If equipment_ids or ingredient_ids are empty, use user's saved preferences
-    if ((!equipment_ids || equipment_ids.length === 0 || !ingredient_ids || ingredient_ids.length === 0)) {
+    if (equipment_ids.length === 0 || ingredient_ids.length === 0) {
       const [prefs] = await db
         .select()
         .from(userPreferences)
@@ -54,41 +73,31 @@ app.post('/generate', requireAuth, async (c) => {
         .limit(1);
 
       if (prefs) {
-        if (!equipment_ids || equipment_ids.length === 0) {
+        if (equipment_ids.length === 0) {
           equipment_ids = prefs.equipmentIds || [];
         }
-        if (!ingredient_ids || ingredient_ids.length === 0) {
+        if (ingredient_ids.length === 0) {
           ingredient_ids = prefs.ingredientIds || [];
         }
       }
     }
 
-    // Validate input
-    if (!equipment_ids || !Array.isArray(equipment_ids) || equipment_ids.length === 0) {
+    // Validate that we have equipment and ingredients after preference fallback
+    if (equipment_ids.length === 0) {
       return c.json(
         {
           success: false,
-          error: 'equipment_ids must be a non-empty array',
+          error: 'equipment_ids must be a non-empty array (no saved preferences found)',
         },
         400
       );
     }
 
-    if (!ingredient_ids || !Array.isArray(ingredient_ids) || ingredient_ids.length === 0) {
+    if (ingredient_ids.length === 0) {
       return c.json(
         {
           success: false,
-          error: 'ingredient_ids must be a non-empty array',
-        },
-        400
-      );
-    }
-
-    if (!mood_id || typeof mood_id !== 'number') {
-      return c.json(
-        {
-          success: false,
-          error: 'mood_id must be a number',
+          error: 'ingredient_ids must be a non-empty array (no saved preferences found)',
         },
         400
       );
@@ -145,7 +154,7 @@ app.post('/generate', requireAuth, async (c) => {
 
     const mood = moodData[0];
 
-    // Generate recipe using OpenAI
+    // Generate recipe using AI
     const generatedRecipe = await generateRecipe({
       equipmentNames: equipmentData.map((e) => e.name),
       ingredientNames: ingredientData.map((i) => i.name),
@@ -154,57 +163,70 @@ app.post('/generate', requireAuth, async (c) => {
       moodExamples: mood.exampleDrinks,
     });
 
-    // Save recipe to database with user association
-    const [savedRecipe] = await db
-      .insert(recipes)
-      .values({
-        name: generatedRecipe.name,
-        description: generatedRecipe.description,
-        moodId: mood_id,
-        userId: authUser.uid,
-      })
-      .returning();
+    // Save recipe + relations in a transaction for atomicity
+    const savedRecipe = await db.transaction(async (tx) => {
+      const [recipe] = await tx
+        .insert(recipes)
+        .values({
+          name: generatedRecipe.name,
+          description: generatedRecipe.description,
+          moodId: mood_id,
+          userId: authUser.uid,
+        })
+        .returning();
 
-    // Save recipe ingredients
-    for (const recipeIngredient of generatedRecipe.ingredients) {
-      // Find ingredient by name
-      const matchedIngredient = ingredientData.find(
-        (i) => i.name.toLowerCase() === recipeIngredient.name.toLowerCase()
-      );
+      // Batch insert recipe ingredients
+      const ingredientValues = generatedRecipe.ingredients
+        .map((ri) => {
+          const matched = ingredientData.find(
+            (i) => i.name.toLowerCase() === ri.name.toLowerCase()
+          );
+          if (!matched) return null;
+          return {
+            recipeId: recipe.id,
+            ingredientId: matched.id,
+            amount: ri.amount,
+          };
+        })
+        .filter((v): v is NonNullable<typeof v> => v !== null);
 
-      if (matchedIngredient) {
-        await db.insert(recipeIngredients).values({
-          recipeId: savedRecipe.id,
-          ingredientId: matchedIngredient.id,
-          amount: recipeIngredient.amount,
-        });
+      if (ingredientValues.length > 0) {
+        await tx.insert(recipeIngredients).values(ingredientValues);
       }
-    }
 
-    // Save recipe steps
-    for (let i = 0; i < generatedRecipe.steps.length; i++) {
-      await db.insert(recipeSteps).values({
-        recipeId: savedRecipe.id,
+      // Batch insert recipe steps
+      const stepValues = generatedRecipe.steps.map((instruction, i) => ({
+        recipeId: recipe.id,
         stepNumber: i + 1,
-        instruction: generatedRecipe.steps[i],
-      });
-    }
+        instruction,
+      }));
 
-    // Save recipe equipment
-    if (generatedRecipe.equipmentUsed) {
-      for (const equipmentName of generatedRecipe.equipmentUsed) {
-        const matchedEquipment = equipmentData.find(
-          (e) => e.name.toLowerCase() === equipmentName.toLowerCase()
-        );
+      if (stepValues.length > 0) {
+        await tx.insert(recipeSteps).values(stepValues);
+      }
 
-        if (matchedEquipment) {
-          await db.insert(recipeEquipment).values({
-            recipeId: savedRecipe.id,
-            equipmentId: matchedEquipment.id,
-          });
+      // Batch insert recipe equipment
+      if (generatedRecipe.equipmentUsed) {
+        const equipmentValues = generatedRecipe.equipmentUsed
+          .map((name) => {
+            const matched = equipmentData.find(
+              (e) => e.name.toLowerCase() === name.toLowerCase()
+            );
+            if (!matched) return null;
+            return {
+              recipeId: recipe.id,
+              equipmentId: matched.id,
+            };
+          })
+          .filter((v): v is NonNullable<typeof v> => v !== null);
+
+        if (equipmentValues.length > 0) {
+          await tx.insert(recipeEquipment).values(equipmentValues);
         }
       }
-    }
+
+      return recipe;
+    });
 
     // Fetch complete recipe with relations
     const completeRecipe = await getCompleteRecipe(savedRecipe.id);
@@ -225,11 +247,19 @@ app.post('/generate', requireAuth, async (c) => {
   }
 });
 
-// Get all recipes (with pagination)
+/**
+ * GET /api/recipes
+ * List recipes with pagination. Uses batched queries to avoid N+1.
+ */
 app.get('/', async (c) => {
   try {
-    const limit = parseInt(c.req.query('limit') || '10');
-    const offset = parseInt(c.req.query('offset') || '0');
+    const query = paginationSchema.safeParse({
+      limit: c.req.query('limit'),
+      offset: c.req.query('offset'),
+    });
+
+    const limit = query.success ? query.data.limit : 10;
+    const offset = query.success ? query.data.offset : 0;
 
     const allRecipes = await db
       .select()
@@ -238,9 +268,16 @@ app.get('/', async (c) => {
       .limit(limit)
       .offset(offset);
 
-    const recipesWithDetails = await Promise.all(
-      allRecipes.map((recipe) => getCompleteRecipe(recipe.id))
-    );
+    if (allRecipes.length === 0) {
+      return c.json({
+        success: true,
+        data: [],
+        count: 0,
+      });
+    }
+
+    // Batched queries to avoid N+1
+    const recipesWithDetails = await getCompleteRecipes(allRecipes);
 
     return c.json({
       success: true,
@@ -258,7 +295,10 @@ app.get('/', async (c) => {
   }
 });
 
-// Get recipe by ID
+/**
+ * GET /api/recipes/:id
+ * Get a single recipe by ID with all relations.
+ */
 app.get('/:id', async (c) => {
   const id = parseInt(c.req.param('id'));
 
@@ -300,7 +340,10 @@ app.get('/:id', async (c) => {
   }
 });
 
-// Helper function to get complete recipe with all relations
+/**
+ * Get a single recipe with all its relations (mood, ingredients, steps, equipment).
+ * Used for single-recipe fetches (by ID, after generation).
+ */
 async function getCompleteRecipe(recipeId: number) {
   const [recipe] = await db
     .select()
@@ -373,7 +416,98 @@ async function getCompleteRecipe(recipeId: number) {
   };
 }
 
-// POST /api/recipes/:id/ratings - Submit or update a rating/review
+/**
+ * Batch-fetch complete recipes with all relations.
+ * Uses IN queries instead of per-recipe queries to avoid N+1.
+ * For a page of 10 recipes, this makes 5 queries instead of 41.
+ */
+async function getCompleteRecipes(recipeList: (typeof recipes.$inferSelect)[]) {
+  const recipeIds = recipeList.map((r) => r.id);
+
+  // Batch fetch moods for all recipes that have a moodId
+  const moodIds = [...new Set(recipeList.map((r) => r.moodId).filter((id): id is number => id !== null))];
+  const moodsData = moodIds.length > 0
+    ? await db.select().from(moods).where(inArray(moods.id, moodIds))
+    : [];
+  const moodMap = new Map(moodsData.map((m) => [m.id, m]));
+
+  // Batch fetch ingredients for all recipes
+  const allIngredients = await db
+    .select({
+      recipeId: recipeIngredients.recipeId,
+      amount: recipeIngredients.amount,
+      ingredientId: ingredients.id,
+      ingredientName: ingredients.name,
+      ingredientIcon: ingredients.icon,
+    })
+    .from(recipeIngredients)
+    .innerJoin(ingredients, eq(recipeIngredients.ingredientId, ingredients.id))
+    .where(inArray(recipeIngredients.recipeId, recipeIds));
+
+  // Batch fetch steps for all recipes
+  const allSteps = await db
+    .select()
+    .from(recipeSteps)
+    .where(inArray(recipeSteps.recipeId, recipeIds))
+    .orderBy(recipeSteps.recipeId, recipeSteps.stepNumber);
+
+  // Batch fetch equipment for all recipes
+  const allEquipment = await db
+    .select({
+      recipeId: recipeEquipment.recipeId,
+      equipmentId: equipment.id,
+      equipmentName: equipment.name,
+      equipmentIcon: equipment.icon,
+    })
+    .from(recipeEquipment)
+    .innerJoin(equipment, eq(recipeEquipment.equipmentId, equipment.id))
+    .where(inArray(recipeEquipment.recipeId, recipeIds));
+
+  // Group data by recipe ID
+  const ingredientsByRecipe = new Map<number, typeof allIngredients>();
+  for (const ing of allIngredients) {
+    const list = ingredientsByRecipe.get(ing.recipeId) || [];
+    list.push(ing);
+    ingredientsByRecipe.set(ing.recipeId, list);
+  }
+
+  const stepsByRecipe = new Map<number, typeof allSteps>();
+  for (const step of allSteps) {
+    const list = stepsByRecipe.get(step.recipeId) || [];
+    list.push(step);
+    stepsByRecipe.set(step.recipeId, list);
+  }
+
+  const equipmentByRecipe = new Map<number, typeof allEquipment>();
+  for (const eq of allEquipment) {
+    const list = equipmentByRecipe.get(eq.recipeId) || [];
+    list.push(eq);
+    equipmentByRecipe.set(eq.recipeId, list);
+  }
+
+  // Assemble complete recipes
+  return recipeList.map((recipe) => ({
+    ...recipe,
+    mood: recipe.moodId ? moodMap.get(recipe.moodId) || null : null,
+    ingredients: (ingredientsByRecipe.get(recipe.id) || []).map((ri) => ({
+      id: ri.ingredientId,
+      name: ri.ingredientName,
+      icon: ri.ingredientIcon,
+      amount: ri.amount,
+    })),
+    steps: (stepsByRecipe.get(recipe.id) || []).map((s) => s.instruction),
+    equipment: (equipmentByRecipe.get(recipe.id) || []).map((re) => ({
+      id: re.equipmentId,
+      name: re.equipmentName,
+      icon: re.equipmentIcon,
+    })),
+  }));
+}
+
+/**
+ * POST /api/recipes/:id/ratings
+ * Submit or update a rating/review for a recipe (upsert).
+ */
 app.post('/:id/ratings', requireAuth, async (c) => {
   const recipeId = parseInt(c.req.param('id'));
 
@@ -390,40 +524,20 @@ app.post('/:id/ratings', requireAuth, async (c) => {
   try {
     const authUser = c.get('user') as AuthUser;
     const body = await c.req.json();
-    const { stars, review } = body;
 
-    // Validate stars
-    if (!stars || typeof stars !== 'number' || stars < 1 || stars > 5) {
+    // Validate request body with Zod
+    const parsed = submitRatingSchema.safeParse(body);
+    if (!parsed.success) {
       return c.json(
         {
           success: false,
-          error: 'stars must be a number between 1 and 5',
+          error: parsed.error.issues.map((i) => i.message).join('; '),
         },
         400
       );
     }
 
-    // Validate review if provided
-    if (review !== undefined && review !== null) {
-      if (typeof review !== 'string') {
-        return c.json(
-          {
-            success: false,
-            error: 'review must be a string',
-          },
-          400
-        );
-      }
-      if (review.length > 500) {
-        return c.json(
-          {
-            success: false,
-            error: 'review must be 500 characters or less',
-          },
-          400
-        );
-      }
-    }
+    const { stars, review } = parsed.data;
 
     // Ensure user exists
     const user = await getOrCreateUser(authUser);
@@ -490,7 +604,10 @@ app.post('/:id/ratings', requireAuth, async (c) => {
   }
 });
 
-// GET /api/recipes/:id/ratings - Get all ratings for a recipe
+/**
+ * GET /api/recipes/:id/ratings
+ * List all ratings for a recipe with pagination and sorting.
+ */
 app.get('/:id/ratings', async (c) => {
   const recipeId = parseInt(c.req.param('id'));
 
@@ -505,9 +622,16 @@ app.get('/:id/ratings', async (c) => {
   }
 
   try {
-    const limit = Math.min(parseInt(c.req.query('limit') || '20'), 100);
-    const offset = parseInt(c.req.query('offset') || '0');
-    const sort = c.req.query('sort') || 'newest';
+    // Validate query params with Zod
+    const query = ratingsQuerySchema.safeParse({
+      limit: c.req.query('limit'),
+      offset: c.req.query('offset'),
+      sort: c.req.query('sort'),
+    });
+
+    const { limit, offset, sort } = query.success
+      ? query.data
+      : { limit: 20, offset: 0, sort: 'newest' as const };
 
     // Determine sort order
     let orderClause;
@@ -578,7 +702,10 @@ app.get('/:id/ratings', async (c) => {
   }
 });
 
-// GET /api/recipes/:id/ratings/aggregate - Get aggregate rating statistics
+/**
+ * GET /api/recipes/:id/ratings/aggregate
+ * Get aggregate rating statistics (average, total, distribution) for a recipe.
+ */
 app.get('/:id/ratings/aggregate', async (c) => {
   const recipeId = parseInt(c.req.param('id'));
 
@@ -646,7 +773,10 @@ app.get('/:id/ratings/aggregate', async (c) => {
   }
 });
 
-// DELETE /api/recipes/:recipeId/ratings/:ratingId - Delete a rating
+/**
+ * DELETE /api/recipes/:recipeId/ratings/:ratingId
+ * Delete a rating. Only the rating owner can delete their own rating.
+ */
 app.delete('/:recipeId/ratings/:ratingId', requireAuth, async (c) => {
   const recipeId = parseInt(c.req.param('recipeId'));
   const ratingId = parseInt(c.req.param('ratingId'));

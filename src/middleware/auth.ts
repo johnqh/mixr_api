@@ -2,25 +2,32 @@ import type { Context, Next } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { auth, isFirebaseEnabled } from '../config/firebase';
 
-// Extend Hono's context to include user information
+/** User information extracted from a Firebase auth token */
 export interface AuthUser {
   uid: string;
   email?: string;
   emailVerified?: boolean;
 }
 
-// Development mode mock user
+/** Development mode mock user used when Firebase is not configured */
 const DEV_USER: AuthUser = {
   uid: 'dev-user-123',
   email: 'dev@mixr.local',
   emailVerified: true,
 };
 
-// Middleware for required authentication
+/**
+ * Middleware that requires a valid Firebase auth token.
+ * Sets `c.get('user')` with the authenticated user's info.
+ *
+ * In development mode (Firebase not configured), automatically uses
+ * a mock user to allow testing without auth tokens.
+ *
+ * @throws HTTPException 401 if the token is missing, invalid, or expired
+ */
 export async function requireAuth(c: Context, next: Next) {
-  // If Firebase is not enabled (development mode), use mock user
   if (!isFirebaseEnabled) {
-    console.log('🔓 Auth bypassed (dev mode) - using mock user');
+    console.log('Auth bypassed (dev mode) - using mock user');
     c.set('user', DEV_USER);
     await next();
     return;
@@ -39,7 +46,6 @@ export async function requireAuth(c: Context, next: Next) {
   try {
     const decodedToken = await auth!.verifyIdToken(token);
 
-    // Store user info in context
     c.set('user', {
       uid: decodedToken.uid,
       email: decodedToken.email,
@@ -55,12 +61,15 @@ export async function requireAuth(c: Context, next: Next) {
   }
 }
 
-// Middleware for optional authentication
+/**
+ * Middleware for optional authentication.
+ * If a valid auth token is present, sets `c.get('user')`.
+ * If no token or an invalid token is present, continues without error.
+ *
+ * Useful for endpoints that behave differently for authenticated vs anonymous users.
+ */
 export async function optionalAuth(c: Context, next: Next) {
-  // If Firebase is not enabled (development mode), optionally use mock user
   if (!isFirebaseEnabled) {
-    // In dev mode, we can optionally set a user, or leave it undefined
-    // For now, let's not set a user for optional auth in dev mode
     await next();
     return;
   }
@@ -73,7 +82,6 @@ export async function optionalAuth(c: Context, next: Next) {
     try {
       const decodedToken = await auth!.verifyIdToken(token);
 
-      // Store user info in context
       c.set('user', {
         uid: decodedToken.uid,
         email: decodedToken.email,

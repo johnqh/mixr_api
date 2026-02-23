@@ -17,10 +17,14 @@ const app = new Hono();
 // Middleware
 app.use('*', logger());
 app.use('*', prettyJSON());
+// CORS: use CORS_ORIGINS env var in production, '*' in development
+const corsOrigin = env.CORS_ORIGINS
+  ? env.CORS_ORIGINS.split(',').map((o) => o.trim())
+  : '*';
 app.use(
   '*',
   cors({
-    origin: '*',
+    origin: corsOrigin,
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
   })

@@ -1,5 +1,10 @@
 import OpenAI from 'openai';
 import { env } from '../config/env';
+import { buildRecipePrompt, parseRecipeResponse } from './recipeParser';
+
+// Re-export types and pure functions for convenience
+export type { GenerateRecipeParams, RecipeIngredient, GeneratedRecipe } from './recipeParser';
+export { extractJson, parseRecipeResponse, buildRecipePrompt } from './recipeParser';
 
 // Configure OpenAI client based on whether LLM Studio endpoint is set
 const openai = new OpenAI({
@@ -9,78 +14,26 @@ const openai = new OpenAI({
   baseURL: env.LLM_STUDIO_ENDPOINT || undefined, // Use LLM Studio endpoint if set, otherwise use default OpenAI endpoint
 });
 
-interface GenerateRecipeParams {
-  equipmentNames: string[];
-  ingredientNames: string[];
-  moodName: string;
-  moodDescription: string;
-  moodExamples: string;
-}
-
-interface RecipeIngredient {
-  name: string;
-  amount: string;
-}
-
-interface GeneratedRecipe {
-  name: string;
-  description: string;
-  ingredients: RecipeIngredient[];
-  steps: string[];
-  equipmentUsed: string[];
-}
-
+/**
+ * Generate a cocktail recipe using the AI service (OpenAI or LM Studio).
+ *
+ * @param params - Equipment, ingredients, and mood to generate a recipe for
+ * @returns The generated recipe with name, description, ingredients, steps, and equipment
+ * @throws Error with descriptive message if generation or parsing fails
+ */
 export async function generateRecipe(
-  params: GenerateRecipeParams
-): Promise<GeneratedRecipe> {
-  const { equipmentNames, ingredientNames, moodName, moodDescription, moodExamples } = params;
+  params: Parameters<typeof buildRecipePrompt>[0]
+): Promise<ReturnType<typeof parseRecipeResponse>> {
+  const prompt = buildRecipePrompt(params);
 
-  const prompt = `You are a professional mixologist. Create a unique cocktail recipe based on the following constraints:
+  // Use different model based on whether LLM Studio endpoint is configured
+  const model = env.LLM_STUDIO_ENDPOINT
+    ? 'qwen-32b-everything' // LLM Studio model
+    : 'gpt-4'; // OpenAI model
 
-AVAILABLE EQUIPMENT:
-${equipmentNames.join(', ')}
-
-AVAILABLE INGREDIENTS:
-${ingredientNames.join(', ')}
-
-MOOD: ${moodName}
-Description: ${moodDescription}
-Example drinks for inspiration: ${moodExamples}
-
-INSTRUCTIONS:
-1. Create a creative cocktail recipe that matches the mood
-2. ONLY use ingredients from the available ingredients list
-3. ONLY use equipment from the available equipment list
-4. Provide specific measurements for each ingredient (e.g., "2 oz", "1/2 oz", "3 dashes", "1 whole")
-5. Provide clear, numbered step-by-step instructions
-6. Make the recipe realistic and achievable with the given equipment
-
-Return your response in the following JSON format:
-{
-  "name": "Cocktail Name",
-  "description": "Brief description of the cocktail (1-2 sentences)",
-  "ingredients": [
-    {
-      "name": "Ingredient name (must match exactly from available ingredients)",
-      "amount": "Measurement"
-    }
-  ],
-  "steps": [
-    "Step 1 instruction",
-    "Step 2 instruction"
-  ],
-  "equipmentUsed": ["Equipment 1", "Equipment 2"]
-}
-
-Ensure the cocktail is creative, delicious, and perfectly matches the ${moodName} mood.`;
-
+  let completion: OpenAI.Chat.Completions.ChatCompletion;
   try {
-    // Use different model based on whether LLM Studio endpoint is configured
-    const model = env.LLM_STUDIO_ENDPOINT
-      ? 'qwen-32b-everything' // LLM Studio model
-      : 'gpt-4'; // OpenAI model
-
-    const completion = await openai.chat.completions.create({
+    completion = await openai.chat.completions.create({
       model,
       messages: [
         {
@@ -97,22 +50,16 @@ Ensure the cocktail is creative, delicious, and perfectly matches the ${moodName
       // Relying on system message to enforce JSON output
       temperature: 0.8,
     });
-
-    const content = completion.choices[0].message.content;
-    if (!content) {
-      throw new Error('No response from OpenAI');
-    }
-
-    const recipe: GeneratedRecipe = JSON.parse(content);
-
-    // Validate the response has required fields
-    if (!recipe.name || !recipe.ingredients || !recipe.steps) {
-      throw new Error('Invalid recipe format from OpenAI');
-    }
-
-    return recipe;
   } catch (error) {
-    console.error('Error generating recipe:', error);
-    throw new Error('Failed to generate recipe');
+    const message = error instanceof Error ? error.message : 'Unknown API error';
+    console.error('AI API call failed:', message);
+    throw new Error(`AI service error: ${message}`);
   }
+
+  const content = completion.choices[0].message.content;
+  if (!content) {
+    throw new Error('AI service returned empty response');
+  }
+
+  return parseRecipeResponse(content);
 }

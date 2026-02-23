@@ -4,7 +4,10 @@ import { db, moods } from '../db';
 
 const app = new Hono();
 
-// Get all moods
+/**
+ * GET /api/moods
+ * List all mood options for recipe generation.
+ */
 app.get('/', async (c) => {
   try {
     const results = await db.select().from(moods);
@@ -25,7 +28,10 @@ app.get('/', async (c) => {
   }
 });
 
-// Get mood by ID
+/**
+ * GET /api/moods/:id
+ * Get a single mood by ID.
+ */
 app.get('/:id', async (c) => {
   const id = parseInt(c.req.param('id'));
 

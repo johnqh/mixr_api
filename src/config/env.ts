@@ -11,6 +11,8 @@ const envSchema = z.object({
   FIREBASE_PRIVATE_KEY: z.string().min(1, 'FIREBASE_PRIVATE_KEY is required'),
   PORT: z.string().default('6174'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  /** Comma-separated list of allowed CORS origins. Defaults to '*' in development. */
+  CORS_ORIGINS: z.string().optional(),
 });
 
 function parseEnvFile(filePath: string): Record<string, string> {
@@ -69,6 +71,7 @@ function loadEnv() {
     FIREBASE_PRIVATE_KEY: envLocal.FIREBASE_PRIVATE_KEY || envFile.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY,
     PORT: envLocal.PORT || envFile.PORT || process.env.PORT,
     NODE_ENV: envLocal.NODE_ENV || envFile.NODE_ENV || process.env.NODE_ENV,
+    CORS_ORIGINS: envLocal.CORS_ORIGINS || envFile.CORS_ORIGINS || process.env.CORS_ORIGINS,
   };
 }
 
