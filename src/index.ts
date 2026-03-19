@@ -11,6 +11,7 @@ import ingredientsRoutes from './routes/ingredients';
 import moodsRoutes from './routes/moods';
 import recipesRoutes from './routes/recipes';
 import usersRoutes from './routes/users';
+import subscriptionsRoutes from './routes/subscriptions';
 
 const app = new Hono();
 
@@ -56,6 +57,7 @@ app.route('/api/ingredients', ingredientsRoutes);
 app.route('/api/moods', moodsRoutes);
 app.route('/api/recipes', recipesRoutes);
 app.route('/api/users', usersRoutes);
+app.route('/api/v1/users', subscriptionsRoutes);
 
 // 404 handler
 app.notFound((c) => {
