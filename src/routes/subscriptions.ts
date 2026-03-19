@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { NONE_ENTITLEMENT } from '@sudobility/types';
 import { requireAuth, type AuthUser } from '../middleware/auth';
 import {
   getSubscriptionHelper,
@@ -44,7 +45,7 @@ app.get('/:userId/subscriptions', requireAuth, async (c) => {
     return c.json({
       success: true,
       data: {
-        hasSubscription: subscriptionInfo.entitlements.length > 0,
+        hasSubscription: subscriptionInfo.entitlements.length > 0 && !subscriptionInfo.entitlements.includes(NONE_ENTITLEMENT),
         entitlements: subscriptionInfo.entitlements,
         subscriptionStartedAt: subscriptionInfo.subscriptionStartedAt,
         platform: subscriptionInfo.platform,
