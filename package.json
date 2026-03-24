@@ -1,6 +1,6 @@
 {
   "name": "mixr_api",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "module": "src/index.ts",
   "type": "module",
   "private": true,
@@ -39,14 +39,18 @@
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.4",
-    "@sudobility/mixr_types": "^0.0.16",
-    "@sudobility/subscription_service": "^1.0.14",
-    "@sudobility/types": "^1.9.59",
+    "@sudobility/mixr_types": "^0.0.17",
+    "@sudobility/subscription_service": "^1.0.15",
+    "@sudobility/types": "^1.9.60",
     "drizzle-orm": "^0.44.6",
     "firebase-admin": "^13.6.0",
     "hono": "^4.9.12",
     "openai": "^6.3.0",
     "postgres": "^3.4.7",
     "zod": "^4.1.12"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/johnqh/mixr_api.git"
   }
 }
