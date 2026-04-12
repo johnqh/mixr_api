@@ -4,6 +4,11 @@ import { logger } from 'hono/logger';
 import { prettyJSON } from 'hono/pretty-json';
 import { errorHandler } from './middleware/errorHandler';
 import { env } from './config/env';
+import type {
+  VersionResponse,
+  HealthResponse,
+  MixrErrorResponse,
+} from '@sudobility/mixr_types';
 
 // Import routes
 import equipmentRoutes from './routes/equipment';
@@ -20,7 +25,7 @@ app.use('*', logger());
 app.use('*', prettyJSON());
 // CORS: use CORS_ORIGINS env var in production, '*' in development
 const corsOrigin = env.CORS_ORIGINS
-  ? env.CORS_ORIGINS.split(',').map((o) => o.trim())
+  ? env.CORS_ORIGINS.split(',').map(o => o.trim())
   : '*';
 app.use(
   '*',
@@ -35,16 +40,16 @@ app.use(
 app.onError(errorHandler);
 
 // Health check
-app.get('/', (c) => {
-  return c.json({
+app.get('/', c => {
+  return c.json<VersionResponse>({
     success: true,
     message: 'MIXR API is running',
     version: '0.0.1',
   });
 });
 
-app.get('/health', (c) => {
-  return c.json({
+app.get('/health', c => {
+  return c.json<HealthResponse>({
     success: true,
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -60,8 +65,8 @@ app.route('/api/users', usersRoutes);
 app.route('/api/v1/users', subscriptionsRoutes);
 
 // 404 handler
-app.notFound((c) => {
-  return c.json(
+app.notFound(c => {
+  return c.json<MixrErrorResponse>(
     {
       success: false,
       error: 'Route not found',

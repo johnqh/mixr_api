@@ -6,15 +6,12 @@ import { z } from 'zod';
 
 /** Schema for POST /api/recipes/generate request body */
 export const generateRecipeSchema = z.object({
-  equipment_ids: z
-    .array(z.number().int().positive())
-    .optional()
-    .default([]),
-  ingredient_ids: z
-    .array(z.number().int().positive())
-    .optional()
-    .default([]),
-  mood_id: z.number().int().positive({ message: 'mood_id must be a positive integer' }),
+  equipment_ids: z.array(z.number().int().positive()).optional().default([]),
+  ingredient_ids: z.array(z.number().int().positive()).optional().default([]),
+  mood_id: z
+    .number()
+    .int()
+    .positive({ message: 'mood_id must be a positive integer' }),
 });
 
 /** Schema for POST /api/recipes/:id/ratings request body */
@@ -46,7 +43,10 @@ export const updatePreferencesSchema = z.object({
 
 /** Schema for POST /api/users/me/favorites request body */
 export const addFavoriteSchema = z.object({
-  recipe_id: z.number().int().positive({ message: 'recipe_id must be a positive integer' }),
+  recipe_id: z
+    .number()
+    .int()
+    .positive({ message: 'recipe_id must be a positive integer' }),
 });
 
 /** Schema for pagination query parameters */

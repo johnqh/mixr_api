@@ -58,7 +58,9 @@ beforeAll(async () => {
     insertedTestData.equipmentIds = equipmentResult.map(e => e.id);
     testEquipmentIds = insertedTestData.equipmentIds;
     console.log(`  ✓ Inserted ${equipmentResult.length} equipment items:`);
-    equipmentResult.forEach(e => console.log(`    - ${e.icon} ${e.name} (ID: ${e.id})`));
+    equipmentResult.forEach(e =>
+      console.log(`    - ${e.icon} ${e.name} (ID: ${e.id})`)
+    );
 
     // Insert test ingredients
     console.log('\n🥃 Inserting test ingredients...');
@@ -76,7 +78,9 @@ beforeAll(async () => {
     insertedTestData.ingredientIds = ingredientResult.map(i => i.id);
     testIngredientIds = insertedTestData.ingredientIds;
     console.log(`  ✓ Inserted ${ingredientResult.length} ingredients:`);
-    ingredientResult.forEach(i => console.log(`    - ${i.icon} ${i.name} (ID: ${i.id})`));
+    ingredientResult.forEach(i =>
+      console.log(`    - ${i.icon} ${i.name} (ID: ${i.id})`)
+    );
 
     // Insert test mood
     console.log('\n😊 Inserting test mood...');
@@ -95,10 +99,14 @@ beforeAll(async () => {
 
     insertedTestData.moodIds = moodResult.map(m => m.id);
     testMoodId = moodResult[0].id;
-    console.log(`  ✓ Inserted mood: ${moodResult[0].emoji} ${moodResult[0].name} (ID: ${moodResult[0].id})`);
+    console.log(
+      `  ✓ Inserted mood: ${moodResult[0].emoji} ${moodResult[0].name} (ID: ${moodResult[0].id})`
+    );
 
     console.log('\n✅ Test data population complete!\n');
-    console.log('═══════════════════════════════════════════════════════════\n');
+    console.log(
+      '═══════════════════════════════════════════════════════════\n'
+    );
   } catch (error) {
     console.error('❌ Failed to populate test data:', error);
     throw error;
@@ -112,7 +120,9 @@ afterAll(async () => {
   try {
     // Clean up test equipment
     if (insertedTestData.equipmentIds.length > 0) {
-      console.log(`🔧 Removing ${insertedTestData.equipmentIds.length} test equipment items...`);
+      console.log(
+        `🔧 Removing ${insertedTestData.equipmentIds.length} test equipment items...`
+      );
       await db
         .delete(equipment)
         .where(inArray(equipment.id, insertedTestData.equipmentIds));
@@ -121,7 +131,9 @@ afterAll(async () => {
 
     // Clean up test ingredients
     if (insertedTestData.ingredientIds.length > 0) {
-      console.log(`🥃 Removing ${insertedTestData.ingredientIds.length} test ingredients...`);
+      console.log(
+        `🥃 Removing ${insertedTestData.ingredientIds.length} test ingredients...`
+      );
       await db
         .delete(ingredients)
         .where(inArray(ingredients.id, insertedTestData.ingredientIds));
@@ -130,17 +142,19 @@ afterAll(async () => {
 
     // Clean up test moods
     if (insertedTestData.moodIds.length > 0) {
-      console.log(`😊 Removing ${insertedTestData.moodIds.length} test moods...`);
-      await db
-        .delete(moods)
-        .where(inArray(moods.id, insertedTestData.moodIds));
+      console.log(
+        `😊 Removing ${insertedTestData.moodIds.length} test moods...`
+      );
+      await db.delete(moods).where(inArray(moods.id, insertedTestData.moodIds));
       console.log('  ✓ Test moods removed');
     }
 
     console.log('\n✅ Test cleanup complete!\n');
     console.log('╔══════════════════════════════════════════════════════════╗');
     console.log('║       🎉 All Tests Complete!                             ║');
-    console.log('╚══════════════════════════════════════════════════════════╝\n');
+    console.log(
+      '╚══════════════════════════════════════════════════════════╝\n'
+    );
   } catch (error) {
     console.error('❌ Failed to clean up test data:', error);
   }
@@ -178,8 +192,12 @@ test('GET /api/equipment - should return equipment list', async () => {
   console.log(`📥 Found ${data.data?.length || 0} total equipment items`);
   console.log(`📥 Our test equipment IDs: [${testEquipmentIds.join(', ')}]`);
 
-  const ourTestItems = data.data.filter((item: any) => testEquipmentIds.includes(item.id));
-  console.log(`📥 Found ${ourTestItems.length} of our test equipment items in response`);
+  const ourTestItems = data.data.filter((item: any) =>
+    testEquipmentIds.includes(item.id)
+  );
+  console.log(
+    `📥 Found ${ourTestItems.length} of our test equipment items in response`
+  );
   ourTestItems.forEach((item: any) => {
     console.log(`    - ${item.icon} ${item.name} (ID: ${item.id})`);
   });
@@ -205,8 +223,12 @@ test('GET /api/ingredients - should return ingredients list', async () => {
   console.log(`📥 Found ${data.data?.length || 0} total ingredients`);
   console.log(`📥 Our test ingredient IDs: [${testIngredientIds.join(', ')}]`);
 
-  const ourTestItems = data.data.filter((item: any) => testIngredientIds.includes(item.id));
-  console.log(`📥 Found ${ourTestItems.length} of our test ingredients in response`);
+  const ourTestItems = data.data.filter((item: any) =>
+    testIngredientIds.includes(item.id)
+  );
+  console.log(
+    `📥 Found ${ourTestItems.length} of our test ingredients in response`
+  );
   ourTestItems.forEach((item: any) => {
     console.log(`    - ${item.icon} ${item.name} (ID: ${item.id})`);
   });
@@ -234,7 +256,9 @@ test('GET /api/moods - should return moods list', async () => {
 
   const ourTestMood = data.data.find((item: any) => item.id === testMoodId);
   if (ourTestMood) {
-    console.log(`📥 Found our test mood: ${ourTestMood.emoji} ${ourTestMood.name} (ID: ${ourTestMood.id})`);
+    console.log(
+      `📥 Found our test mood: ${ourTestMood.emoji} ${ourTestMood.name} (ID: ${ourTestMood.id})`
+    );
   }
 
   expect(response.status).toBe(200);
@@ -262,7 +286,9 @@ test('POST /api/recipes/generate - should generate a cocktail recipe', async () 
 
   console.log(`\n📤 Request: POST ${API_URL}/api/recipes/generate`);
   console.log(`📤 Body: ${JSON.stringify(requestBody, null, 2)}`);
-  console.log('\n⏳ Sending request to OpenAI API... (this may take a few seconds)');
+  console.log(
+    '\n⏳ Sending request to OpenAI API... (this may take a few seconds)'
+  );
 
   const startTime = Date.now();
   const response = await fetch(`${API_URL}/api/recipes/generate`, {
@@ -292,7 +318,9 @@ test('POST /api/recipes/generate - should generate a cocktail recipe', async () 
   console.log('\n🎉 ═════════════ GENERATED RECIPE ═════════════');
   console.log(`   Name: ${recipe.name}`);
   console.log(`   Description: ${recipe.description}`);
-  console.log(`   Mood: ${recipe.mood?.name || 'N/A'} ${recipe.mood?.emoji || ''}`);
+  console.log(
+    `   Mood: ${recipe.mood?.name || 'N/A'} ${recipe.mood?.emoji || ''}`
+  );
   console.log('\n   📝 Ingredients:');
   recipe.ingredients?.forEach((ing: any, idx: number) => {
     console.log(`      ${idx + 1}. ${ing.amount} ${ing.name}`);
@@ -343,7 +371,9 @@ test('GET /api/recipes - should return recipes list', async () => {
 
   if (data.data.length > 0) {
     console.log(`📥 Latest recipe: "${data.data[0].name}"`);
-    console.log(`   - Description: ${data.data[0].description?.substring(0, 80)}...`);
+    console.log(
+      `   - Description: ${data.data[0].description?.substring(0, 80)}...`
+    );
     console.log(`   - Mood: ${data.data[0].mood?.name || 'N/A'}`);
   }
 

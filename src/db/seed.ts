@@ -16,7 +16,11 @@ async function seed() {
       { subcategory: 'essential', name: 'Muddler', icon: '🔨' },
 
       // Glassware
-      { subcategory: 'glassware', name: 'Rocks glass (old fashioned)', icon: '🥃' },
+      {
+        subcategory: 'glassware',
+        name: 'Rocks glass (old fashioned)',
+        icon: '🥃',
+      },
       { subcategory: 'glassware', name: 'Highball glass', icon: '🍹' },
       { subcategory: 'glassware', name: 'Martini glass', icon: '🍸' },
       { subcategory: 'glassware', name: 'Coupe glass', icon: '🥂' },
@@ -180,7 +184,7 @@ async function seed() {
         emoji: '😤',
         name: 'Tense',
         description: 'Calming, smooth drinks to help you unwind',
-        exampleDrinks: 'Whiskey Sour, Dark \'n\' Stormy, Negroni',
+        exampleDrinks: "Whiskey Sour, Dark 'n' Stormy, Negroni",
         imageName: 'tense.jpg',
       },
       {

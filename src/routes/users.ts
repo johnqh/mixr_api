@@ -1,8 +1,36 @@
 import { Hono } from 'hono';
 import { eq, desc, and, inArray } from 'drizzle-orm';
-import { db, users, userPreferences, recipes, userFavorites, recipeIngredients, recipeSteps, recipeEquipment, equipment, ingredients, moods } from '../db';
+import {
+  db,
+  users,
+  userPreferences,
+  recipes,
+  userFavorites,
+  recipeIngredients,
+  recipeSteps,
+  recipeEquipment,
+  equipment,
+  ingredients,
+  moods,
+} from '../db';
 import { requireAuth, type AuthUser } from '../middleware/auth';
-import { updateUserSchema, updatePreferencesSchema, addFavoriteSchema, paginationSchema } from '../validation/schemas';
+import {
+  updateUserSchema,
+  updatePreferencesSchema,
+  addFavoriteSchema,
+  paginationSchema,
+} from '../validation/schemas';
+import type {
+  UserResponse,
+  UserPreferencesResponse,
+  RecipeListResponse,
+  AddFavoriteResponse,
+  RemoveFavoriteResponse,
+  MixrErrorResponse,
+  Recipe,
+  User,
+  UserPreferences,
+} from '@sudobility/mixr_types';
 
 type Variables = {
   user: AuthUser;
@@ -42,17 +70,26 @@ async function getOrCreateUser(authUser: AuthUser) {
  * Batch-fetch complete recipes with all relations.
  * Uses IN queries instead of per-recipe queries to avoid N+1.
  */
-async function getCompleteRecipes(recipeList: (typeof recipes.$inferSelect)[]) {
+async function getCompleteRecipes(
+  recipeList: (typeof recipes.$inferSelect)[]
+): Promise<Recipe[]> {
   if (recipeList.length === 0) return [];
 
-  const recipeIds = recipeList.map((r) => r.id);
+  const recipeIds = recipeList.map(r => r.id);
 
   // Batch fetch moods
-  const moodIds = [...new Set(recipeList.map((r) => r.moodId).filter((id): id is number => id !== null))];
-  const moodsData = moodIds.length > 0
-    ? await db.select().from(moods).where(inArray(moods.id, moodIds))
-    : [];
-  const moodMap = new Map(moodsData.map((m) => [m.id, m]));
+  const moodIds = [
+    ...new Set(
+      recipeList.map(r => r.moodId).filter((id): id is number => id !== null)
+    ),
+  ];
+  const moodsData =
+    moodIds.length > 0
+      ? await db.select().from(moods).where(inArray(moods.id, moodIds))
+      : [];
+  const moodMap = new Map(
+    moodsData.map(m => [m.id, { ...m, createdAt: m.createdAt.toISOString() }])
+  );
 
   // Batch fetch ingredients
   const allIngredients = await db
@@ -102,41 +139,47 @@ async function getCompleteRecipes(recipeList: (typeof recipes.$inferSelect)[]) {
   }
 
   const equipmentByRecipe = new Map<number, typeof allEquipment>();
-  for (const eq of allEquipment) {
-    const list = equipmentByRecipe.get(eq.recipeId) || [];
-    list.push(eq);
-    equipmentByRecipe.set(eq.recipeId, list);
+  for (const eqItem of allEquipment) {
+    const list = equipmentByRecipe.get(eqItem.recipeId) || [];
+    list.push(eqItem);
+    equipmentByRecipe.set(eqItem.recipeId, list);
   }
 
-  return recipeList.map((recipe) => ({
-    ...recipe,
-    mood: recipe.moodId ? moodMap.get(recipe.moodId) || null : null,
-    ingredients: (ingredientsByRecipe.get(recipe.id) || []).map((ri) => ({
-      id: ri.ingredientId,
-      name: ri.ingredientName,
-      icon: ri.ingredientIcon,
-      amount: ri.amount,
-    })),
-    steps: (stepsByRecipe.get(recipe.id) || []).map((s) => s.instruction),
-    equipment: (equipmentByRecipe.get(recipe.id) || []).map((re) => ({
-      id: re.equipmentId,
-      name: re.equipmentName,
-      icon: re.equipmentIcon,
-    })),
-  }));
+  return recipeList.map(
+    (recipe): Recipe => ({
+      id: recipe.id,
+      name: recipe.name,
+      description: recipe.description,
+      moodId: recipe.moodId,
+      createdAt: recipe.createdAt.toISOString(),
+      mood: recipe.moodId ? moodMap.get(recipe.moodId) || null : null,
+      ingredients: (ingredientsByRecipe.get(recipe.id) || []).map(ri => ({
+        id: ri.ingredientId,
+        name: ri.ingredientName,
+        icon: ri.ingredientIcon,
+        amount: ri.amount,
+      })),
+      steps: (stepsByRecipe.get(recipe.id) || []).map(s => s.instruction),
+      equipment: (equipmentByRecipe.get(recipe.id) || []).map(re => ({
+        id: re.equipmentId,
+        name: re.equipmentName,
+        icon: re.equipmentIcon,
+      })),
+    })
+  );
 }
 
 /**
  * GET /api/users/me
  * Get current user's profile. Auto-creates user on first call.
  */
-app.get('/me', async (c) => {
+app.get('/me', async c => {
   try {
     const authUser = c.get('user') as AuthUser;
     const user = await getOrCreateUser(authUser);
 
     if (!user) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
           error: 'User not found',
@@ -145,19 +188,21 @@ app.get('/me', async (c) => {
       );
     }
 
-    return c.json({
+    const userData: User = {
+      id: user.id,
+      email: user.email,
+      display_name: user.displayName || '',
+      created_at: user.createdAt.toISOString(),
+      updated_at: user.updatedAt.toISOString(),
+    };
+
+    return c.json<UserResponse>({
       success: true,
-      data: {
-        id: user.id,
-        email: user.email,
-        display_name: user.displayName,
-        created_at: user.createdAt,
-        updated_at: user.updatedAt,
-      },
+      data: userData,
     });
   } catch (error) {
     console.error('Get user error:', error);
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Failed to fetch user',
@@ -171,7 +216,7 @@ app.get('/me', async (c) => {
  * PUT /api/users/me
  * Update current user's display name.
  */
-app.put('/me', async (c) => {
+app.put('/me', async c => {
   try {
     const authUser = c.get('user') as AuthUser;
     const body = await c.req.json();
@@ -179,10 +224,10 @@ app.put('/me', async (c) => {
     // Validate request body with Zod
     const parsed = updateUserSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
-          error: parsed.error.issues.map((i) => i.message).join('; '),
+          error: parsed.error.issues.map(i => i.message).join('; '),
         },
         400
       );
@@ -203,19 +248,21 @@ app.put('/me', async (c) => {
       .where(eq(users.id, authUser.uid))
       .returning();
 
-    return c.json({
+    const userData: User = {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      display_name: updatedUser.displayName || '',
+      created_at: updatedUser.createdAt.toISOString(),
+      updated_at: updatedUser.updatedAt.toISOString(),
+    };
+
+    return c.json<UserResponse>({
       success: true,
-      data: {
-        id: updatedUser.id,
-        email: updatedUser.email,
-        display_name: updatedUser.displayName,
-        created_at: updatedUser.createdAt,
-        updated_at: updatedUser.updatedAt,
-      },
+      data: userData,
     });
   } catch (error) {
     console.error('Update user error:', error);
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Failed to update user',
@@ -229,7 +276,7 @@ app.put('/me', async (c) => {
  * GET /api/users/me/preferences
  * Get user's equipment and ingredient preference IDs.
  */
-app.get('/me/preferences', async (c) => {
+app.get('/me/preferences', async c => {
   try {
     const authUser = c.get('user') as AuthUser;
 
@@ -243,27 +290,30 @@ app.get('/me/preferences', async (c) => {
       .limit(1);
 
     if (!prefs) {
-      return c.json({
+      const defaultPrefs: UserPreferences = {
+        equipment_ids: [],
+        ingredient_ids: [],
+        updated_at: new Date().toISOString(),
+      };
+      return c.json<UserPreferencesResponse>({
         success: true,
-        data: {
-          equipment_ids: [],
-          ingredient_ids: [],
-          updated_at: new Date().toISOString(),
-        },
+        data: defaultPrefs,
       });
     }
 
-    return c.json({
+    const prefsData: UserPreferences = {
+      equipment_ids: prefs.equipmentIds || [],
+      ingredient_ids: prefs.ingredientIds || [],
+      updated_at: prefs.updatedAt.toISOString(),
+    };
+
+    return c.json<UserPreferencesResponse>({
       success: true,
-      data: {
-        equipment_ids: prefs.equipmentIds || [],
-        ingredient_ids: prefs.ingredientIds || [],
-        updated_at: prefs.updatedAt,
-      },
+      data: prefsData,
     });
   } catch (error) {
     console.error('Get preferences error:', error);
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Failed to fetch preferences',
@@ -277,7 +327,7 @@ app.get('/me/preferences', async (c) => {
  * PUT /api/users/me/preferences
  * Update user's equipment and ingredient preferences (upsert).
  */
-app.put('/me/preferences', async (c) => {
+app.put('/me/preferences', async c => {
   try {
     const authUser = c.get('user') as AuthUser;
     const body = await c.req.json();
@@ -285,10 +335,10 @@ app.put('/me/preferences', async (c) => {
     // Validate request body with Zod
     const parsed = updatePreferencesSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
-          error: parsed.error.issues.map((i) => i.message).join('; '),
+          error: parsed.error.issues.map(i => i.message).join('; '),
         },
         400
       );
@@ -318,17 +368,19 @@ app.put('/me/preferences', async (c) => {
       })
       .returning();
 
-    return c.json({
+    const prefsData: UserPreferences = {
+      equipment_ids: prefs.equipmentIds || [],
+      ingredient_ids: prefs.ingredientIds || [],
+      updated_at: prefs.updatedAt.toISOString(),
+    };
+
+    return c.json<UserPreferencesResponse>({
       success: true,
-      data: {
-        equipment_ids: prefs.equipmentIds || [],
-        ingredient_ids: prefs.ingredientIds || [],
-        updated_at: prefs.updatedAt,
-      },
+      data: prefsData,
     });
   } catch (error) {
     console.error('Update preferences error:', error);
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Failed to update preferences',
@@ -342,7 +394,7 @@ app.put('/me/preferences', async (c) => {
  * GET /api/users/me/recipes
  * Get recipes generated by the current user with pagination.
  */
-app.get('/me/recipes', async (c) => {
+app.get('/me/recipes', async c => {
   try {
     const authUser = c.get('user') as AuthUser;
 
@@ -368,14 +420,14 @@ app.get('/me/recipes', async (c) => {
     // Use batched query to avoid N+1
     const recipesWithDetails = await getCompleteRecipes(userRecipes);
 
-    return c.json({
+    return c.json<RecipeListResponse>({
       success: true,
       data: recipesWithDetails,
       count: recipesWithDetails.length,
     });
   } catch (error) {
     console.error('Get user recipes error:', error);
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Failed to fetch user recipes',
@@ -389,7 +441,7 @@ app.get('/me/recipes', async (c) => {
  * GET /api/users/me/favorites
  * Get user's favorite recipes with pagination.
  */
-app.get('/me/favorites', async (c) => {
+app.get('/me/favorites', async c => {
   try {
     const authUser = c.get('user') as AuthUser;
 
@@ -416,7 +468,7 @@ app.get('/me/favorites', async (c) => {
       .offset(offset);
 
     if (favorites.length === 0) {
-      return c.json({
+      return c.json<RecipeListResponse>({
         success: true,
         data: [],
         count: 0,
@@ -424,7 +476,7 @@ app.get('/me/favorites', async (c) => {
     }
 
     // Fetch the actual recipes
-    const favoriteRecipeIds = favorites.map((f) => f.recipeId);
+    const favoriteRecipeIds = favorites.map(f => f.recipeId);
     const favoriteRecipes = await db
       .select()
       .from(recipes)
@@ -433,14 +485,14 @@ app.get('/me/favorites', async (c) => {
     // Use batched query to avoid N+1
     const recipesWithDetails = await getCompleteRecipes(favoriteRecipes);
 
-    return c.json({
+    return c.json<RecipeListResponse>({
       success: true,
       data: recipesWithDetails,
       count: recipesWithDetails.length,
     });
   } catch (error) {
     console.error('Get favorites error:', error);
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Failed to fetch favorites',
@@ -454,7 +506,7 @@ app.get('/me/favorites', async (c) => {
  * POST /api/users/me/favorites
  * Add a recipe to the user's favorites.
  */
-app.post('/me/favorites', async (c) => {
+app.post('/me/favorites', async c => {
   try {
     const authUser = c.get('user') as AuthUser;
     const body = await c.req.json();
@@ -462,10 +514,10 @@ app.post('/me/favorites', async (c) => {
     // Validate request body with Zod
     const parsed = addFavoriteSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
-          error: parsed.error.issues.map((i) => i.message).join('; '),
+          error: parsed.error.issues.map(i => i.message).join('; '),
         },
         400
       );
@@ -484,7 +536,7 @@ app.post('/me/favorites', async (c) => {
       .limit(1);
 
     if (!recipe) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
           error: 'Recipe not found',
@@ -502,13 +554,13 @@ app.post('/me/favorites', async (c) => {
       })
       .onConflictDoNothing();
 
-    return c.json({
+    return c.json<AddFavoriteResponse>({
       success: true,
       message: 'Recipe added to favorites',
     });
   } catch (error) {
     console.error('Add favorite error:', error);
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Failed to add favorite',
@@ -522,13 +574,13 @@ app.post('/me/favorites', async (c) => {
  * DELETE /api/users/me/favorites/:recipeId
  * Remove a recipe from the user's favorites.
  */
-app.delete('/me/favorites/:recipeId', async (c) => {
+app.delete('/me/favorites/:recipeId', async c => {
   try {
     const authUser = c.get('user') as AuthUser;
     const recipeId = parseInt(c.req.param('recipeId'));
 
     if (isNaN(recipeId)) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
           error: 'Invalid recipe ID',
@@ -550,13 +602,13 @@ app.delete('/me/favorites/:recipeId', async (c) => {
         )
       );
 
-    return c.json({
+    return c.json<RemoveFavoriteResponse>({
       success: true,
       message: 'Recipe removed from favorites',
     });
   } catch (error) {
     console.error('Remove favorite error:', error);
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Failed to remove favorite',

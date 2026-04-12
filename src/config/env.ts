@@ -10,7 +10,9 @@ const envSchema = z.object({
   FIREBASE_CLIENT_EMAIL: z.string().min(1, 'FIREBASE_CLIENT_EMAIL is required'),
   FIREBASE_PRIVATE_KEY: z.string().min(1, 'FIREBASE_PRIVATE_KEY is required'),
   PORT: z.string().default('6174'),
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  NODE_ENV: z
+    .enum(['development', 'production', 'test'])
+    .default('development'),
   /** Comma-separated list of allowed CORS origins. Defaults to '*' in development. */
   CORS_ORIGINS: z.string().optional(),
 });
@@ -40,8 +42,10 @@ function parseEnvFile(filePath: string): Record<string, string> {
       let value = match[2].trim();
 
       // Remove quotes if present
-      if ((value.startsWith('"') && value.endsWith('"')) ||
-          (value.startsWith("'") && value.endsWith("'"))) {
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
         value = value.slice(1, -1);
       }
 
@@ -63,15 +67,32 @@ function loadEnv() {
 
   // Priority: .env.local > .env > process.env
   return {
-    DATABASE_URL: envLocal.DATABASE_URL || envFile.DATABASE_URL || process.env.DATABASE_URL,
-    OPENAI_API_KEY: envLocal.OPENAI_API_KEY || envFile.OPENAI_API_KEY || process.env.OPENAI_API_KEY,
-    LLM_STUDIO_ENDPOINT: envLocal.LLM_STUDIO_ENDPOINT || envFile.LLM_STUDIO_ENDPOINT || process.env.LLM_STUDIO_ENDPOINT,
-    FIREBASE_PROJECT_ID: envLocal.FIREBASE_PROJECT_ID || envFile.FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID,
-    FIREBASE_CLIENT_EMAIL: envLocal.FIREBASE_CLIENT_EMAIL || envFile.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_CLIENT_EMAIL,
-    FIREBASE_PRIVATE_KEY: envLocal.FIREBASE_PRIVATE_KEY || envFile.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY,
+    DATABASE_URL:
+      envLocal.DATABASE_URL || envFile.DATABASE_URL || process.env.DATABASE_URL,
+    OPENAI_API_KEY:
+      envLocal.OPENAI_API_KEY ||
+      envFile.OPENAI_API_KEY ||
+      process.env.OPENAI_API_KEY,
+    LLM_STUDIO_ENDPOINT:
+      envLocal.LLM_STUDIO_ENDPOINT ||
+      envFile.LLM_STUDIO_ENDPOINT ||
+      process.env.LLM_STUDIO_ENDPOINT,
+    FIREBASE_PROJECT_ID:
+      envLocal.FIREBASE_PROJECT_ID ||
+      envFile.FIREBASE_PROJECT_ID ||
+      process.env.FIREBASE_PROJECT_ID,
+    FIREBASE_CLIENT_EMAIL:
+      envLocal.FIREBASE_CLIENT_EMAIL ||
+      envFile.FIREBASE_CLIENT_EMAIL ||
+      process.env.FIREBASE_CLIENT_EMAIL,
+    FIREBASE_PRIVATE_KEY:
+      envLocal.FIREBASE_PRIVATE_KEY ||
+      envFile.FIREBASE_PRIVATE_KEY ||
+      process.env.FIREBASE_PRIVATE_KEY,
     PORT: envLocal.PORT || envFile.PORT || process.env.PORT,
     NODE_ENV: envLocal.NODE_ENV || envFile.NODE_ENV || process.env.NODE_ENV,
-    CORS_ORIGINS: envLocal.CORS_ORIGINS || envFile.CORS_ORIGINS || process.env.CORS_ORIGINS,
+    CORS_ORIGINS:
+      envLocal.CORS_ORIGINS || envFile.CORS_ORIGINS || process.env.CORS_ORIGINS,
   };
 }
 

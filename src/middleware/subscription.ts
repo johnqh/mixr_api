@@ -1,5 +1,5 @@
-import type { Context } from "hono";
-import { SubscriptionHelper } from "@sudobility/subscription_service";
+import type { Context } from 'hono';
+import { SubscriptionHelper } from '@sudobility/subscription_service';
 
 let _subscriptionHelper: SubscriptionHelper | null = null;
 
@@ -14,5 +14,5 @@ export function getSubscriptionHelper(): SubscriptionHelper | null {
 
 export function getTestMode(c: Context): boolean {
   const url = new URL(c.req.url);
-  return url.searchParams.get("testMode") === "true";
+  return url.searchParams.get('testMode') === 'true';
 }

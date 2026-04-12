@@ -1,5 +1,12 @@
 import { test, expect, beforeAll, afterAll, describe } from 'bun:test';
-import { db, users, userPreferences, recipes, recipeRatings, userFavorites } from './db';
+import {
+  db,
+  users,
+  userPreferences,
+  recipes,
+  recipeRatings,
+  userFavorites,
+} from './db';
 import { eq, inArray } from 'drizzle-orm';
 
 const API_URL = 'http://localhost:6174';
@@ -31,7 +38,9 @@ const TEST_USER_EMAIL = `test-${Date.now()}@example.com`;
 const skipTests = !TEST_TOKEN;
 
 if (skipTests) {
-  console.log('\n⚠️  Skipping auth integration tests - TEST_FIREBASE_TOKEN not set\n');
+  console.log(
+    '\n⚠️  Skipping auth integration tests - TEST_FIREBASE_TOKEN not set\n'
+  );
 }
 
 // Helper to wait for server to be ready
@@ -71,9 +80,7 @@ afterAll(async () => {
 
   try {
     // Clean up test user's data (cascades will handle related data)
-    await db
-      .delete(users)
-      .where(eq(users.id, TEST_USER_ID));
+    await db.delete(users).where(eq(users.id, TEST_USER_ID));
 
     console.log('✅ Test cleanup complete!\n');
   } catch (error) {
@@ -87,7 +94,7 @@ describe('User Management', () => {
 
     const response = await fetch(`${API_URL}/api/users/me`, {
       headers: {
-        'Authorization': `Bearer ${TEST_TOKEN}`,
+        Authorization: `Bearer ${TEST_TOKEN}`,
       },
     });
 
@@ -106,7 +113,7 @@ describe('User Management', () => {
     const response = await fetch(`${API_URL}/api/users/me`, {
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${TEST_TOKEN}`,
+        Authorization: `Bearer ${TEST_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -138,7 +145,7 @@ describe('User Preferences', () => {
 
     const response = await fetch(`${API_URL}/api/users/me/preferences`, {
       headers: {
-        'Authorization': `Bearer ${TEST_TOKEN}`,
+        Authorization: `Bearer ${TEST_TOKEN}`,
       },
     });
 
@@ -156,7 +163,7 @@ describe('User Preferences', () => {
     const response = await fetch(`${API_URL}/api/users/me/preferences`, {
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${TEST_TOKEN}`,
+        Authorization: `Bearer ${TEST_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -178,7 +185,7 @@ describe('User Preferences', () => {
 
     const response = await fetch(`${API_URL}/api/users/me/preferences`, {
       headers: {
-        'Authorization': `Bearer ${TEST_TOKEN}`,
+        Authorization: `Bearer ${TEST_TOKEN}`,
       },
     });
 
@@ -212,17 +219,20 @@ describe('Recipe Ratings', () => {
   test('POST /api/recipes/:id/ratings - should submit a rating', async () => {
     if (skipTests) return;
 
-    const response = await fetch(`${API_URL}/api/recipes/${testRecipeId}/ratings`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${TEST_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        stars: 5,
-        review: 'Amazing cocktail! Love it.',
-      }),
-    });
+    const response = await fetch(
+      `${API_URL}/api/recipes/${testRecipeId}/ratings`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${TEST_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          stars: 5,
+          review: 'Amazing cocktail! Love it.',
+        }),
+      }
+    );
 
     const data = await response.json();
 
@@ -237,17 +247,20 @@ describe('Recipe Ratings', () => {
   test('POST /api/recipes/:id/ratings - should update existing rating', async () => {
     if (skipTests) return;
 
-    const response = await fetch(`${API_URL}/api/recipes/${testRecipeId}/ratings`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${TEST_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        stars: 4,
-        review: 'Updated review',
-      }),
-    });
+    const response = await fetch(
+      `${API_URL}/api/recipes/${testRecipeId}/ratings`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${TEST_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          stars: 4,
+          review: 'Updated review',
+        }),
+      }
+    );
 
     const data = await response.json();
 
@@ -260,17 +273,20 @@ describe('Recipe Ratings', () => {
   test('POST /api/recipes/:id/ratings - should validate stars range', async () => {
     if (skipTests) return;
 
-    const response = await fetch(`${API_URL}/api/recipes/${testRecipeId}/ratings`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${TEST_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        stars: 6,
-        review: 'Invalid rating',
-      }),
-    });
+    const response = await fetch(
+      `${API_URL}/api/recipes/${testRecipeId}/ratings`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${TEST_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          stars: 6,
+          review: 'Invalid rating',
+        }),
+      }
+    );
 
     const data = await response.json();
 
@@ -281,7 +297,9 @@ describe('Recipe Ratings', () => {
   test('GET /api/recipes/:id/ratings - should get all ratings', async () => {
     if (skipTests) return;
 
-    const response = await fetch(`${API_URL}/api/recipes/${testRecipeId}/ratings`);
+    const response = await fetch(
+      `${API_URL}/api/recipes/${testRecipeId}/ratings`
+    );
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -294,7 +312,9 @@ describe('Recipe Ratings', () => {
   test('GET /api/recipes/:id/ratings/aggregate - should get aggregate stats', async () => {
     if (skipTests) return;
 
-    const response = await fetch(`${API_URL}/api/recipes/${testRecipeId}/ratings/aggregate`);
+    const response = await fetch(
+      `${API_URL}/api/recipes/${testRecipeId}/ratings/aggregate`
+    );
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -313,7 +333,7 @@ describe('Recipe Ratings', () => {
       {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${TEST_TOKEN}`,
+          Authorization: `Bearer ${TEST_TOKEN}`,
         },
       }
     );
@@ -328,9 +348,7 @@ describe('Recipe Ratings', () => {
   afterAll(async () => {
     if (skipTests) return;
 
-    await db
-      .delete(recipes)
-      .where(eq(recipes.id, testRecipeId));
+    await db.delete(recipes).where(eq(recipes.id, testRecipeId));
   });
 });
 
@@ -359,7 +377,7 @@ describe('User Favorites', () => {
     const response = await fetch(`${API_URL}/api/users/me/favorites`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${TEST_TOKEN}`,
+        Authorization: `Bearer ${TEST_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -378,7 +396,7 @@ describe('User Favorites', () => {
 
     const response = await fetch(`${API_URL}/api/users/me/favorites`, {
       headers: {
-        'Authorization': `Bearer ${TEST_TOKEN}`,
+        Authorization: `Bearer ${TEST_TOKEN}`,
       },
     });
 
@@ -393,12 +411,15 @@ describe('User Favorites', () => {
   test('DELETE /api/users/me/favorites/:recipeId - should remove from favorites', async () => {
     if (skipTests) return;
 
-    const response = await fetch(`${API_URL}/api/users/me/favorites/${favRecipeId}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${TEST_TOKEN}`,
-      },
-    });
+    const response = await fetch(
+      `${API_URL}/api/users/me/favorites/${favRecipeId}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${TEST_TOKEN}`,
+        },
+      }
+    );
 
     const data = await response.json();
 
@@ -409,9 +430,7 @@ describe('User Favorites', () => {
   afterAll(async () => {
     if (skipTests) return;
 
-    await db
-      .delete(recipes)
-      .where(eq(recipes.id, favRecipeId));
+    await db.delete(recipes).where(eq(recipes.id, favRecipeId));
   });
 });
 
@@ -421,7 +440,7 @@ describe('User Recipes', () => {
 
     const response = await fetch(`${API_URL}/api/users/me/recipes`, {
       headers: {
-        'Authorization': `Bearer ${TEST_TOKEN}`,
+        Authorization: `Bearer ${TEST_TOKEN}`,
       },
     });
 

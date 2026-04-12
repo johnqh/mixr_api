@@ -27,12 +27,20 @@ if (hasValidFirebaseConfig && !admin.apps.length) {
     firebaseInitialized = true;
     console.log('✅ Firebase Admin initialized successfully');
   } catch (_error) {
-    console.warn('⚠️  Firebase initialization failed. Running in development mode without authentication.');
-    console.warn('   To enable authentication, configure valid Firebase credentials in .env.local');
+    console.warn(
+      '⚠️  Firebase initialization failed. Running in development mode without authentication.'
+    );
+    console.warn(
+      '   To enable authentication, configure valid Firebase credentials in .env.local'
+    );
   }
 } else {
-  console.warn('⚠️  Firebase credentials not configured. Running in development mode without authentication.');
-  console.warn('   Protected endpoints will be accessible without auth tokens.');
+  console.warn(
+    '⚠️  Firebase credentials not configured. Running in development mode without authentication.'
+  );
+  console.warn(
+    '   Protected endpoints will be accessible without auth tokens.'
+  );
 }
 
 export const auth = firebaseAuth;

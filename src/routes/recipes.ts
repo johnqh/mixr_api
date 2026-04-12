@@ -1,9 +1,38 @@
 import { Hono } from 'hono';
 import { eq, inArray, desc, and, sql } from 'drizzle-orm';
-import { db, equipment, ingredients, moods, recipes, recipeIngredients, recipeSteps, recipeEquipment, users, userPreferences, recipeRatings } from '../db';
+import {
+  db,
+  equipment,
+  ingredients,
+  moods,
+  recipes,
+  recipeIngredients,
+  recipeSteps,
+  recipeEquipment,
+  users,
+  userPreferences,
+  recipeRatings,
+} from '../db';
 import { generateRecipe } from '../services/recipeGenerator';
 import { requireAuth, type AuthUser } from '../middleware/auth';
-import { generateRecipeSchema, submitRatingSchema, paginationSchema, ratingsQuerySchema } from '../validation/schemas';
+import {
+  generateRecipeSchema,
+  submitRatingSchema,
+  paginationSchema,
+  ratingsQuerySchema,
+} from '../validation/schemas';
+import type {
+  Recipe,
+  RecipeResponse,
+  RecipeListResponse,
+  RecipeRatingResponse,
+  RecipeRatingListResponse,
+  RatingAggregateResponse,
+  DeleteRatingResponse,
+  MixrErrorResponse,
+  RecipeRating,
+  RatingAggregate,
+} from '@sudobility/mixr_types';
 
 type Variables = {
   user: AuthUser;
@@ -41,7 +70,7 @@ async function getOrCreateUser(authUser: AuthUser) {
  * Generate a new AI cocktail recipe based on equipment, ingredients, and mood.
  * Falls back to user's saved preferences if equipment/ingredient IDs are empty.
  */
-app.post('/generate', requireAuth, async (c) => {
+app.post('/generate', requireAuth, async c => {
   try {
     const authUser = c.get('user') as AuthUser;
     const body = await c.req.json();
@@ -49,10 +78,10 @@ app.post('/generate', requireAuth, async (c) => {
     // Validate request body with Zod
     const parsed = generateRecipeSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
-          error: parsed.error.issues.map((i) => i.message).join('; '),
+          error: parsed.error.issues.map(i => i.message).join('; '),
         },
         400
       );
@@ -84,20 +113,22 @@ app.post('/generate', requireAuth, async (c) => {
 
     // Validate that we have equipment and ingredients after preference fallback
     if (equipment_ids.length === 0) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
-          error: 'equipment_ids must be a non-empty array (no saved preferences found)',
+          error:
+            'equipment_ids must be a non-empty array (no saved preferences found)',
         },
         400
       );
     }
 
     if (ingredient_ids.length === 0) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
-          error: 'ingredient_ids must be a non-empty array (no saved preferences found)',
+          error:
+            'ingredient_ids must be a non-empty array (no saved preferences found)',
         },
         400
       );
@@ -110,7 +141,7 @@ app.post('/generate', requireAuth, async (c) => {
       .where(inArray(equipment.id, equipment_ids));
 
     if (equipmentData.length === 0) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
           error: 'No valid equipment found',
@@ -126,7 +157,7 @@ app.post('/generate', requireAuth, async (c) => {
       .where(inArray(ingredients.id, ingredient_ids));
 
     if (ingredientData.length === 0) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
           error: 'No valid ingredients found',
@@ -143,7 +174,7 @@ app.post('/generate', requireAuth, async (c) => {
       .limit(1);
 
     if (moodData.length === 0) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
           error: 'Mood not found',
@@ -156,15 +187,15 @@ app.post('/generate', requireAuth, async (c) => {
 
     // Generate recipe using AI
     const generatedRecipe = await generateRecipe({
-      equipmentNames: equipmentData.map((e) => e.name),
-      ingredientNames: ingredientData.map((i) => i.name),
+      equipmentNames: equipmentData.map(e => e.name),
+      ingredientNames: ingredientData.map(i => i.name),
       moodName: mood.name,
       moodDescription: mood.description,
       moodExamples: mood.exampleDrinks,
     });
 
     // Save recipe + relations in a transaction for atomicity
-    const savedRecipe = await db.transaction(async (tx) => {
+    const savedRecipe = await db.transaction(async tx => {
       const [recipe] = await tx
         .insert(recipes)
         .values({
@@ -177,9 +208,9 @@ app.post('/generate', requireAuth, async (c) => {
 
       // Batch insert recipe ingredients
       const ingredientValues = generatedRecipe.ingredients
-        .map((ri) => {
+        .map(ri => {
           const matched = ingredientData.find(
-            (i) => i.name.toLowerCase() === ri.name.toLowerCase()
+            i => i.name.toLowerCase() === ri.name.toLowerCase()
           );
           if (!matched) return null;
           return {
@@ -208,9 +239,9 @@ app.post('/generate', requireAuth, async (c) => {
       // Batch insert recipe equipment
       if (generatedRecipe.equipmentUsed) {
         const equipmentValues = generatedRecipe.equipmentUsed
-          .map((name) => {
+          .map(name => {
             const matched = equipmentData.find(
-              (e) => e.name.toLowerCase() === name.toLowerCase()
+              e => e.name.toLowerCase() === name.toLowerCase()
             );
             if (!matched) return null;
             return {
@@ -231,16 +262,17 @@ app.post('/generate', requireAuth, async (c) => {
     // Fetch complete recipe with relations
     const completeRecipe = await getCompleteRecipe(savedRecipe.id);
 
-    return c.json({
+    return c.json<RecipeResponse>({
       success: true,
-      data: completeRecipe,
+      data: completeRecipe!,
     });
   } catch (error) {
     console.error('Recipe generation error:', error);
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to generate recipe',
+        error:
+          error instanceof Error ? error.message : 'Failed to generate recipe',
       },
       500
     );
@@ -251,7 +283,7 @@ app.post('/generate', requireAuth, async (c) => {
  * GET /api/recipes
  * List recipes with pagination. Uses batched queries to avoid N+1.
  */
-app.get('/', async (c) => {
+app.get('/', async c => {
   try {
     const query = paginationSchema.safeParse({
       limit: c.req.query('limit'),
@@ -269,7 +301,7 @@ app.get('/', async (c) => {
       .offset(offset);
 
     if (allRecipes.length === 0) {
-      return c.json({
+      return c.json<RecipeListResponse>({
         success: true,
         data: [],
         count: 0,
@@ -279,13 +311,13 @@ app.get('/', async (c) => {
     // Batched queries to avoid N+1
     const recipesWithDetails = await getCompleteRecipes(allRecipes);
 
-    return c.json({
+    return c.json<RecipeListResponse>({
       success: true,
       data: recipesWithDetails,
       count: recipesWithDetails.length,
     });
   } catch (_error) {
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Failed to fetch recipes',
@@ -299,11 +331,11 @@ app.get('/', async (c) => {
  * GET /api/recipes/:id
  * Get a single recipe by ID with all relations.
  */
-app.get('/:id', async (c) => {
+app.get('/:id', async c => {
   const id = parseInt(c.req.param('id'));
 
   if (isNaN(id)) {
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Invalid ID',
@@ -316,7 +348,7 @@ app.get('/:id', async (c) => {
     const recipe = await getCompleteRecipe(id);
 
     if (!recipe) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
           error: 'Recipe not found',
@@ -325,12 +357,12 @@ app.get('/:id', async (c) => {
       );
     }
 
-    return c.json({
+    return c.json<RecipeResponse>({
       success: true,
       data: recipe,
     });
   } catch (_error) {
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Failed to fetch recipe',
@@ -344,7 +376,7 @@ app.get('/:id', async (c) => {
  * Get a single recipe with all its relations (mood, ingredients, steps, equipment).
  * Used for single-recipe fetches (by ID, after generation).
  */
-async function getCompleteRecipe(recipeId: number) {
+async function getCompleteRecipe(recipeId: number): Promise<Recipe | null> {
   const [recipe] = await db
     .select()
     .from(recipes)
@@ -363,7 +395,9 @@ async function getCompleteRecipe(recipeId: number) {
       .from(moods)
       .where(eq(moods.id, recipe.moodId))
       .limit(1);
-    mood = moodData || null;
+    mood = moodData
+      ? { ...moodData, createdAt: moodData.createdAt.toISOString() }
+      : null;
   }
 
   // Get ingredients
@@ -399,16 +433,20 @@ async function getCompleteRecipe(recipeId: number) {
     .where(eq(recipeEquipment.recipeId, recipeId));
 
   return {
-    ...recipe,
+    id: recipe.id,
+    name: recipe.name,
+    description: recipe.description,
+    moodId: recipe.moodId,
+    createdAt: recipe.createdAt.toISOString(),
     mood,
-    ingredients: recipeIngredientsData.map((ri) => ({
+    ingredients: recipeIngredientsData.map(ri => ({
       id: ri.ingredientId,
       name: ri.ingredientName,
       icon: ri.ingredientIcon,
       amount: ri.amount,
     })),
-    steps: steps.map((s) => s.instruction),
-    equipment: recipeEquipmentData.map((re) => ({
+    steps: steps.map(s => s.instruction),
+    equipment: recipeEquipmentData.map(re => ({
       id: re.equipmentId,
       name: re.equipmentName,
       icon: re.equipmentIcon,
@@ -421,15 +459,24 @@ async function getCompleteRecipe(recipeId: number) {
  * Uses IN queries instead of per-recipe queries to avoid N+1.
  * For a page of 10 recipes, this makes 5 queries instead of 41.
  */
-async function getCompleteRecipes(recipeList: (typeof recipes.$inferSelect)[]) {
-  const recipeIds = recipeList.map((r) => r.id);
+async function getCompleteRecipes(
+  recipeList: (typeof recipes.$inferSelect)[]
+): Promise<Recipe[]> {
+  const recipeIds = recipeList.map(r => r.id);
 
   // Batch fetch moods for all recipes that have a moodId
-  const moodIds = [...new Set(recipeList.map((r) => r.moodId).filter((id): id is number => id !== null))];
-  const moodsData = moodIds.length > 0
-    ? await db.select().from(moods).where(inArray(moods.id, moodIds))
-    : [];
-  const moodMap = new Map(moodsData.map((m) => [m.id, m]));
+  const moodIds = [
+    ...new Set(
+      recipeList.map(r => r.moodId).filter((id): id is number => id !== null)
+    ),
+  ];
+  const moodsData =
+    moodIds.length > 0
+      ? await db.select().from(moods).where(inArray(moods.id, moodIds))
+      : [];
+  const moodMap = new Map(
+    moodsData.map(m => [m.id, { ...m, createdAt: m.createdAt.toISOString() }])
+  );
 
   // Batch fetch ingredients for all recipes
   const allIngredients = await db
@@ -479,40 +526,46 @@ async function getCompleteRecipes(recipeList: (typeof recipes.$inferSelect)[]) {
   }
 
   const equipmentByRecipe = new Map<number, typeof allEquipment>();
-  for (const eq of allEquipment) {
-    const list = equipmentByRecipe.get(eq.recipeId) || [];
-    list.push(eq);
-    equipmentByRecipe.set(eq.recipeId, list);
+  for (const eqItem of allEquipment) {
+    const list = equipmentByRecipe.get(eqItem.recipeId) || [];
+    list.push(eqItem);
+    equipmentByRecipe.set(eqItem.recipeId, list);
   }
 
   // Assemble complete recipes
-  return recipeList.map((recipe) => ({
-    ...recipe,
-    mood: recipe.moodId ? moodMap.get(recipe.moodId) || null : null,
-    ingredients: (ingredientsByRecipe.get(recipe.id) || []).map((ri) => ({
-      id: ri.ingredientId,
-      name: ri.ingredientName,
-      icon: ri.ingredientIcon,
-      amount: ri.amount,
-    })),
-    steps: (stepsByRecipe.get(recipe.id) || []).map((s) => s.instruction),
-    equipment: (equipmentByRecipe.get(recipe.id) || []).map((re) => ({
-      id: re.equipmentId,
-      name: re.equipmentName,
-      icon: re.equipmentIcon,
-    })),
-  }));
+  return recipeList.map(
+    (recipe): Recipe => ({
+      id: recipe.id,
+      name: recipe.name,
+      description: recipe.description,
+      moodId: recipe.moodId,
+      createdAt: recipe.createdAt.toISOString(),
+      mood: recipe.moodId ? moodMap.get(recipe.moodId) || null : null,
+      ingredients: (ingredientsByRecipe.get(recipe.id) || []).map(ri => ({
+        id: ri.ingredientId,
+        name: ri.ingredientName,
+        icon: ri.ingredientIcon,
+        amount: ri.amount,
+      })),
+      steps: (stepsByRecipe.get(recipe.id) || []).map(s => s.instruction),
+      equipment: (equipmentByRecipe.get(recipe.id) || []).map(re => ({
+        id: re.equipmentId,
+        name: re.equipmentName,
+        icon: re.equipmentIcon,
+      })),
+    })
+  );
 }
 
 /**
  * POST /api/recipes/:id/ratings
  * Submit or update a rating/review for a recipe (upsert).
  */
-app.post('/:id/ratings', requireAuth, async (c) => {
+app.post('/:id/ratings', requireAuth, async c => {
   const recipeId = parseInt(c.req.param('id'));
 
   if (isNaN(recipeId)) {
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Invalid recipe ID',
@@ -528,10 +581,10 @@ app.post('/:id/ratings', requireAuth, async (c) => {
     // Validate request body with Zod
     const parsed = submitRatingSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
-          error: parsed.error.issues.map((i) => i.message).join('; '),
+          error: parsed.error.issues.map(i => i.message).join('; '),
         },
         400
       );
@@ -550,7 +603,7 @@ app.post('/:id/ratings', requireAuth, async (c) => {
       .limit(1);
 
     if (!recipe) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
           error: 'Recipe not found',
@@ -578,23 +631,25 @@ app.post('/:id/ratings', requireAuth, async (c) => {
       })
       .returning();
 
-    return c.json({
+    const ratingData: RecipeRating = {
+      id: rating.id,
+      recipe_id: rating.recipeId,
+      user_id: rating.userId,
+      user_name: user?.displayName || 'Anonymous',
+      user_email: user?.email || '',
+      stars: rating.stars,
+      review: rating.review,
+      created_at: rating.createdAt.toISOString(),
+      updated_at: rating.updatedAt.toISOString(),
+    };
+
+    return c.json<RecipeRatingResponse>({
       success: true,
-      data: {
-        id: rating.id,
-        recipe_id: rating.recipeId,
-        user_id: rating.userId,
-        user_name: user?.displayName || 'Anonymous',
-        user_email: user?.email || '',
-        stars: rating.stars,
-        review: rating.review,
-        created_at: rating.createdAt,
-        updated_at: rating.updatedAt,
-      },
+      data: ratingData,
     });
   } catch (error) {
     console.error('Submit rating error:', error);
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Failed to submit rating',
@@ -608,11 +663,11 @@ app.post('/:id/ratings', requireAuth, async (c) => {
  * GET /api/recipes/:id/ratings
  * List all ratings for a recipe with pagination and sorting.
  */
-app.get('/:id/ratings', async (c) => {
+app.get('/:id/ratings', async c => {
   const recipeId = parseInt(c.req.param('id'));
 
   if (isNaN(recipeId)) {
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Invalid recipe ID',
@@ -675,24 +730,26 @@ app.get('/:id/ratings', async (c) => {
       .from(recipeRatings)
       .where(eq(recipeRatings.recipeId, recipeId));
 
-    return c.json({
+    const ratingsList: RecipeRating[] = ratings.map(r => ({
+      id: r.id,
+      recipe_id: r.recipeId,
+      user_id: r.userId,
+      user_name: r.userName || 'Anonymous',
+      user_email: r.userEmail,
+      stars: r.stars,
+      review: r.review,
+      created_at: r.createdAt.toISOString(),
+      updated_at: r.updatedAt.toISOString(),
+    }));
+
+    return c.json<RecipeRatingListResponse>({
       success: true,
-      data: ratings.map((r) => ({
-        id: r.id,
-        recipe_id: r.recipeId,
-        user_id: r.userId,
-        user_name: r.userName,
-        user_email: r.userEmail,
-        stars: r.stars,
-        review: r.review,
-        created_at: r.createdAt,
-        updated_at: r.updatedAt,
-      })),
+      data: ratingsList,
       count: countResult.count,
     });
   } catch (error) {
     console.error('Get ratings error:', error);
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Failed to fetch ratings',
@@ -706,11 +763,11 @@ app.get('/:id/ratings', async (c) => {
  * GET /api/recipes/:id/ratings/aggregate
  * Get aggregate rating statistics (average, total, distribution) for a recipe.
  */
-app.get('/:id/ratings/aggregate', async (c) => {
+app.get('/:id/ratings/aggregate', async c => {
   const recipeId = parseInt(c.req.param('id'));
 
   if (isNaN(recipeId)) {
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Invalid recipe ID',
@@ -740,7 +797,7 @@ app.get('/:id/ratings/aggregate', async (c) => {
       .groupBy(recipeRatings.stars);
 
     // Create distribution object
-    const ratingDistribution: Record<string, number> = {
+    const ratingDistribution: RatingAggregate['rating_distribution'] = {
       '1': 0,
       '2': 0,
       '3': 0,
@@ -748,22 +805,26 @@ app.get('/:id/ratings/aggregate', async (c) => {
       '5': 0,
     };
 
-    distribution.forEach((d) => {
-      ratingDistribution[d.stars.toString()] = d.count;
+    distribution.forEach(d => {
+      ratingDistribution[
+        d.stars.toString() as keyof typeof ratingDistribution
+      ] = d.count;
     });
 
-    return c.json({
+    const aggregateData: RatingAggregate = {
+      recipe_id: recipeId,
+      average_rating: stats.averageRating || 0,
+      total_ratings: stats.totalRatings || 0,
+      rating_distribution: ratingDistribution,
+    };
+
+    return c.json<RatingAggregateResponse>({
       success: true,
-      data: {
-        recipe_id: recipeId,
-        average_rating: stats.averageRating || 0,
-        total_ratings: stats.totalRatings || 0,
-        rating_distribution: ratingDistribution,
-      },
+      data: aggregateData,
     });
   } catch (error) {
     console.error('Get aggregate ratings error:', error);
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Failed to fetch aggregate ratings',
@@ -777,12 +838,12 @@ app.get('/:id/ratings/aggregate', async (c) => {
  * DELETE /api/recipes/:recipeId/ratings/:ratingId
  * Delete a rating. Only the rating owner can delete their own rating.
  */
-app.delete('/:recipeId/ratings/:ratingId', requireAuth, async (c) => {
+app.delete('/:recipeId/ratings/:ratingId', requireAuth, async c => {
   const recipeId = parseInt(c.req.param('recipeId'));
   const ratingId = parseInt(c.req.param('ratingId'));
 
   if (isNaN(recipeId) || isNaN(ratingId)) {
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Invalid recipe ID or rating ID',
@@ -808,7 +869,7 @@ app.delete('/:recipeId/ratings/:ratingId', requireAuth, async (c) => {
       .limit(1);
 
     if (!rating) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
           error: 'Rating not found or you do not have permission to delete it',
@@ -818,17 +879,15 @@ app.delete('/:recipeId/ratings/:ratingId', requireAuth, async (c) => {
     }
 
     // Delete rating
-    await db
-      .delete(recipeRatings)
-      .where(eq(recipeRatings.id, ratingId));
+    await db.delete(recipeRatings).where(eq(recipeRatings.id, ratingId));
 
-    return c.json({
+    return c.json<DeleteRatingResponse>({
       success: true,
-      message: 'Rating deleted successfully',
+      data: { message: 'Rating deleted successfully' },
     });
   } catch (error) {
     console.error('Delete rating error:', error);
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Failed to delete rating',

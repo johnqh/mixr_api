@@ -70,7 +70,9 @@ export function parseRecipeResponse(content: string): GeneratedRecipe {
   }
 
   if (!Array.isArray(recipe.ingredients) || recipe.ingredients.length === 0) {
-    throw new Error('Invalid recipe format: missing or empty "ingredients" array');
+    throw new Error(
+      'Invalid recipe format: missing or empty "ingredients" array'
+    );
   }
 
   if (!Array.isArray(recipe.steps) || recipe.steps.length === 0) {
@@ -79,10 +81,13 @@ export function parseRecipeResponse(content: string): GeneratedRecipe {
 
   return {
     name: recipe.name,
-    description: typeof recipe.description === 'string' ? recipe.description : '',
+    description:
+      typeof recipe.description === 'string' ? recipe.description : '',
     ingredients: recipe.ingredients as RecipeIngredient[],
     steps: recipe.steps as string[],
-    equipmentUsed: Array.isArray(recipe.equipmentUsed) ? recipe.equipmentUsed as string[] : [],
+    equipmentUsed: Array.isArray(recipe.equipmentUsed)
+      ? (recipe.equipmentUsed as string[])
+      : [],
   };
 }
 
@@ -90,7 +95,13 @@ export function parseRecipeResponse(content: string): GeneratedRecipe {
  * Build the prompt for the AI recipe generator.
  */
 export function buildRecipePrompt(params: GenerateRecipeParams): string {
-  const { equipmentNames, ingredientNames, moodName, moodDescription, moodExamples } = params;
+  const {
+    equipmentNames,
+    ingredientNames,
+    moodName,
+    moodDescription,
+    moodExamples,
+  } = params;
 
   return `You are a professional mixologist. Create a unique cocktail recipe based on the following constraints:
 

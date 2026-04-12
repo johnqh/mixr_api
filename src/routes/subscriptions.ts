@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
 import { NONE_ENTITLEMENT } from '@sudobility/types';
 import { requireAuth, type AuthUser } from '../middleware/auth';
-import {
-  getSubscriptionHelper,
-  getTestMode,
-} from '../middleware/subscription';
+import { getSubscriptionHelper, getTestMode } from '../middleware/subscription';
+import type {
+  SubscriptionStatusResponse,
+  MixrErrorResponse,
+} from '@sudobility/mixr_types';
 
 type Variables = {
   user: AuthUser;
@@ -17,12 +18,12 @@ const app = new Hono<{ Variables: Variables }>();
  *
  * Get user subscription status (requires Firebase auth).
  */
-app.get('/:userId/subscriptions', requireAuth, async (c) => {
+app.get('/:userId/subscriptions', requireAuth, async c => {
   const requestedUserId = c.req.param('userId');
   const authUser = c.get('user') as AuthUser;
 
   if (authUser.uid !== requestedUserId) {
-    return c.json(
+    return c.json<MixrErrorResponse>(
       { success: false, error: 'You can only access your own subscription' },
       403
     );
@@ -30,7 +31,7 @@ app.get('/:userId/subscriptions', requireAuth, async (c) => {
 
   const subHelper = getSubscriptionHelper();
   if (!subHelper) {
-    return c.json(
+    return c.json<MixrErrorResponse>(
       { success: false, error: 'Subscription service not configured' },
       500
     );
@@ -42,10 +43,12 @@ app.get('/:userId/subscriptions', requireAuth, async (c) => {
       requestedUserId,
       testMode
     );
-    return c.json({
+    return c.json<SubscriptionStatusResponse>({
       success: true,
       data: {
-        hasSubscription: subscriptionInfo.entitlements.length > 0 && !subscriptionInfo.entitlements.includes(NONE_ENTITLEMENT),
+        hasSubscription:
+          subscriptionInfo.entitlements.length > 0 &&
+          !subscriptionInfo.entitlements.includes(NONE_ENTITLEMENT),
         entitlements: subscriptionInfo.entitlements,
         subscriptionStartedAt: subscriptionInfo.subscriptionStartedAt,
         platform: subscriptionInfo.platform,
@@ -54,7 +57,7 @@ app.get('/:userId/subscriptions', requireAuth, async (c) => {
     });
   } catch (error) {
     console.error('Error fetching subscription:', error);
-    return c.json(
+    return c.json<MixrErrorResponse>(
       { success: false, error: 'Failed to fetch subscription status' },
       500
     );

@@ -1,7 +1,14 @@
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
 import { db, equipment } from '../db';
-import { EQUIPMENT_SUBCATEGORIES, type EquipmentSubcategory } from '@sudobility/mixr_types';
+import {
+  EQUIPMENT_SUBCATEGORIES,
+  type EquipmentSubcategory,
+  type EquipmentListResponse,
+  type EquipmentResponse,
+  type EquipmentSubcategoriesResponse,
+  type MixrErrorResponse,
+} from '@sudobility/mixr_types';
 
 const app = new Hono();
 
@@ -9,8 +16,10 @@ const app = new Hono();
  * GET /api/equipment
  * List all equipment, optionally filtered by subcategory query parameter.
  */
-app.get('/', async (c) => {
-  const subcategory = c.req.query('subcategory') as EquipmentSubcategory | undefined;
+app.get('/', async c => {
+  const subcategory = c.req.query('subcategory') as
+    | EquipmentSubcategory
+    | undefined;
 
   try {
     let results;
@@ -23,13 +32,16 @@ app.get('/', async (c) => {
       results = await db.select().from(equipment);
     }
 
-    return c.json({
+    return c.json<EquipmentListResponse>({
       success: true,
-      data: results,
+      data: results.map(r => ({
+        ...r,
+        createdAt: r.createdAt.toISOString(),
+      })),
       count: results.length,
     });
   } catch (_error) {
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Failed to fetch equipment',
@@ -43,10 +55,10 @@ app.get('/', async (c) => {
  * GET /api/equipment/subcategories
  * List all valid equipment subcategory values.
  */
-app.get('/subcategories', async (c) => {
-  return c.json({
+app.get('/subcategories', async c => {
+  return c.json<EquipmentSubcategoriesResponse>({
     success: true,
-    data: EQUIPMENT_SUBCATEGORIES,
+    data: [...EQUIPMENT_SUBCATEGORIES],
   });
 });
 
@@ -54,11 +66,11 @@ app.get('/subcategories', async (c) => {
  * GET /api/equipment/:id
  * Get a single equipment item by ID.
  */
-app.get('/:id', async (c) => {
+app.get('/:id', async c => {
   const id = parseInt(c.req.param('id'));
 
   if (isNaN(id)) {
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Invalid ID',
@@ -75,7 +87,7 @@ app.get('/:id', async (c) => {
       .limit(1);
 
     if (result.length === 0) {
-      return c.json(
+      return c.json<MixrErrorResponse>(
         {
           success: false,
           error: 'Equipment not found',
@@ -84,12 +96,15 @@ app.get('/:id', async (c) => {
       );
     }
 
-    return c.json({
+    return c.json<EquipmentResponse>({
       success: true,
-      data: result[0],
+      data: {
+        ...result[0],
+        createdAt: result[0].createdAt.toISOString(),
+      },
     });
   } catch (_error) {
-    return c.json(
+    return c.json<MixrErrorResponse>(
       {
         success: false,
         error: 'Failed to fetch equipment',
