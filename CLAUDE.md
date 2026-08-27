@@ -1,5 +1,10 @@
 # MIXR API
 
+> **Git policy — never auto-commit or auto-push.** Leave your work in the working tree.
+> Run `git commit`, `git push`, `gh pr create`, or `scripts/push_all.sh` **only when the user
+> explicitly asks in that turn**. Approval for an earlier change does not carry forward, and
+> finishing a task is not permission to commit it.
+
 Backend API server for MIXR - AI-powered cocktail recipe generation platform.
 
 ## Tech Stack
@@ -191,3 +196,7 @@ app.post('/api/recipes/generate', requireAuth, async (c) => {
 ## Docker
 
 Dockerfile included for CI/CD. Uses `oven/bun:latest`, exposes port 6174, health check at `/health`.
+
+## Git Workflow
+
+- Do not use feature branches for code changes. Always stay on the current branch.
