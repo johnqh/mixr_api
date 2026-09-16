@@ -1,6 +1,6 @@
 {
   "name": "mixr_api",
-  "version": "0.0.28",
+  "version": "0.0.29",
   "module": "src/index.ts",
   "type": "module",
   "private": true,
@@ -10,9 +10,9 @@
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
     "start:prod": "bun run dist/index.js",
-    "test": "vitest run tests/unit/",
-    "test:watch": "vitest tests/unit/",
-    "test:integration": "vitest run tests/*.test.ts",
+    "test:unit": "vitest run",
+    "test:integration": "vitest run --config vitest.db.config.ts",
+    "test:watch": "vitest",
     "lint": "bunx eslint src",
     "typecheck": "bunx tsc --noEmit",
     "format": "bunx prettier --write src",
@@ -20,9 +20,11 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun src/db/migrate.ts",
     "db:seed": "bun src/db/seed.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "test:db": "vitest run --config vitest.db.config.ts"
   },
   "devDependencies": {
+    "@sudobility/test-db-guard": "1.0.2",
     "@types/bun": "latest",
     "@types/node": "^24.10.1",
     "@typescript-eslint/eslint-plugin": "^8.50.0",
@@ -39,7 +41,7 @@
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.4",
-    "@sudobility/mixr_types": "^0.0.22",
+    "@sudobility/mixr_types": "^0.0.23",
     "@sudobility/subscription_service": "^1.0.23",
     "@sudobility/types": "^1.9.67",
     "drizzle-orm": "^0.44.6",

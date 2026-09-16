@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { existsSync, readFileSync } from 'fs';
-import { resolve } from 'path';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
@@ -57,7 +58,10 @@ function parseEnvFile(filePath: string): Record<string, string> {
 }
 
 function loadEnv() {
-  const rootDir = resolve(import.meta.dir, '../../');
+  // `import.meta.dir` is Bun-only and is undefined under Node, which is what
+  // vitest runs on. Deriving from import.meta.url works in both.
+  const thisDir = dirname(fileURLToPath(import.meta.url));
+  const rootDir = resolve(thisDir, '../../');
 
   // Load .env first (base/defaults)
   const envFile = parseEnvFile(resolve(rootDir, '.env'));
@@ -65,34 +69,40 @@ function loadEnv() {
   // Load .env.local second (higher priority, overrides .env)
   const envLocal = parseEnvFile(resolve(rootDir, '.env.local'));
 
-  // Priority: .env.local > .env > process.env
+  // Priority: process.env > .env.local > .env
+  //
+  // The environment wins over the files. It used to be the other way round,
+  // which meant an explicitly exported variable was silently overridden by a
+  // committed file -- and it defeated the test database guard outright:
+  // tests/setup.db.ts sets a validated localhost DATABASE_URL in process.env,
+  // and .env promptly replaced it with whatever was on disk.
   return {
     DATABASE_URL:
-      envLocal.DATABASE_URL || envFile.DATABASE_URL || process.env.DATABASE_URL,
+      process.env.DATABASE_URL || envLocal.DATABASE_URL || envFile.DATABASE_URL,
     OPENAI_API_KEY:
+      process.env.OPENAI_API_KEY ||
       envLocal.OPENAI_API_KEY ||
-      envFile.OPENAI_API_KEY ||
-      process.env.OPENAI_API_KEY,
+      envFile.OPENAI_API_KEY,
     LLM_STUDIO_ENDPOINT:
+      process.env.LLM_STUDIO_ENDPOINT ||
       envLocal.LLM_STUDIO_ENDPOINT ||
-      envFile.LLM_STUDIO_ENDPOINT ||
-      process.env.LLM_STUDIO_ENDPOINT,
+      envFile.LLM_STUDIO_ENDPOINT,
     FIREBASE_PROJECT_ID:
+      process.env.FIREBASE_PROJECT_ID ||
       envLocal.FIREBASE_PROJECT_ID ||
-      envFile.FIREBASE_PROJECT_ID ||
-      process.env.FIREBASE_PROJECT_ID,
+      envFile.FIREBASE_PROJECT_ID,
     FIREBASE_CLIENT_EMAIL:
+      process.env.FIREBASE_CLIENT_EMAIL ||
       envLocal.FIREBASE_CLIENT_EMAIL ||
-      envFile.FIREBASE_CLIENT_EMAIL ||
-      process.env.FIREBASE_CLIENT_EMAIL,
+      envFile.FIREBASE_CLIENT_EMAIL,
     FIREBASE_PRIVATE_KEY:
+      process.env.FIREBASE_PRIVATE_KEY ||
       envLocal.FIREBASE_PRIVATE_KEY ||
-      envFile.FIREBASE_PRIVATE_KEY ||
-      process.env.FIREBASE_PRIVATE_KEY,
-    PORT: envLocal.PORT || envFile.PORT || process.env.PORT,
-    NODE_ENV: envLocal.NODE_ENV || envFile.NODE_ENV || process.env.NODE_ENV,
+      envFile.FIREBASE_PRIVATE_KEY,
+    PORT: process.env.PORT || envLocal.PORT || envFile.PORT,
+    NODE_ENV: process.env.NODE_ENV || envLocal.NODE_ENV || envFile.NODE_ENV,
     CORS_ORIGINS:
-      envLocal.CORS_ORIGINS || envFile.CORS_ORIGINS || process.env.CORS_ORIGINS,
+      process.env.CORS_ORIGINS || envLocal.CORS_ORIGINS || envFile.CORS_ORIGINS,
   };
 }
 

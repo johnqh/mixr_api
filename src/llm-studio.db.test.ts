@@ -1,4 +1,4 @@
-import { test, expect, beforeAll, describe } from 'bun:test';
+import { test, expect, beforeAll, describe } from 'vitest';
 import { generateRecipe } from './services/recipeGenerator';
 import { env } from './config/env';
 
@@ -30,187 +30,186 @@ describe('LLM Studio Server Integration Tests', () => {
     }
   });
 
-  test('LLM Studio Server endpoint should be accessible', async () => {
-    console.log('┌─────────────────────────────────────────────────────────┐');
-    console.log('│ 🏥 TEST: LLM Studio Server Health Check                 │');
-    console.log('└─────────────────────────────────────────────────────────┘');
-
-    if (!env.LLM_STUDIO_ENDPOINT) {
-      console.log('⏭️  Skipping: LLM_STUDIO_ENDPOINT not configured');
-      return;
-    }
-
-    // Extract base URL (remove /v1 if present)
-    const baseUrl = env.LLM_STUDIO_ENDPOINT.replace(/\/v1\/?$/, '');
-
-    console.log(`📤 Checking LLM Studio Server at: ${baseUrl}`);
-
-    try {
-      // Try to fetch the models endpoint
-      const modelsUrl = `${env.LLM_STUDIO_ENDPOINT}/models`;
-      console.log(`📤 Request: GET ${modelsUrl}`);
-
-      const response = await fetch(modelsUrl, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      console.log(`📥 Response Status: ${response.status}`);
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log(`📥 Available models:`, JSON.stringify(data, null, 2));
-        expect(response.status).toBe(200);
-        console.log('✅ LLM Studio Server is accessible!\n');
-      } else {
-        console.log('⚠️  Server responded but with non-200 status');
-        console.log(`   Response: ${await response.text()}`);
-        // Don't fail the test, just warn
-      }
-    } catch (error) {
-      console.error('❌ Failed to connect to LLM Studio Server:', error);
-      throw new Error(
-        `Cannot connect to LLM Studio Server at ${env.LLM_STUDIO_ENDPOINT}. ` +
-          `Please ensure LLM Studio is running on ${baseUrl}`
-      );
-    }
-  });
-
   test(
-    'Should generate a valid recipe using LLM Studio Server',
+    'LLM Studio Server endpoint should be accessible',
+    { timeout: 60000 }, // 60 second timeout
     async () => {
       console.log(
         '┌─────────────────────────────────────────────────────────┐'
       );
       console.log(
-        '│ 🍸 TEST: Recipe Generation via LLM Studio Server        │'
+        '│ 🏥 TEST: LLM Studio Server Health Check                 │'
       );
       console.log(
         '└─────────────────────────────────────────────────────────┘'
       );
 
-      const testParams = {
-        equipmentNames: [
-          'Cocktail Shaker',
-          'Jigger',
-          'Strainer',
-          'Highball Glass',
-        ],
-        ingredientNames: [
-          'Vodka',
-          'Lime Juice',
-          'Simple Syrup',
-          'Club Soda',
-          'Mint Leaves',
-        ],
-        moodName: 'Refreshing',
-        moodDescription:
-          'Light, crisp, and invigorating drinks perfect for a hot day',
-        moodExamples: 'Mojito, Tom Collins, Gin and Tonic',
-      };
+      if (!env.LLM_STUDIO_ENDPOINT) {
+        console.log('⏭️  Skipping: LLM_STUDIO_ENDPOINT not configured');
+        return;
+      }
 
-      console.log('📋 Test Parameters:');
-      console.log(`   Equipment: ${testParams.equipmentNames.join(', ')}`);
-      console.log(`   Ingredients: ${testParams.ingredientNames.join(', ')}`);
-      console.log(`   Mood: ${testParams.moodName}`);
-      console.log(
-        `   Using: ${env.LLM_STUDIO_ENDPOINT ? 'LLM Studio Server' : 'OpenAI API'}`
-      );
+      // Extract base URL (remove /v1 if present)
+      const baseUrl = env.LLM_STUDIO_ENDPOINT.replace(/\/v1\/?$/, '');
 
-      console.log('\n⏳ Generating recipe... (this may take 10-30 seconds)');
-
-      const startTime = Date.now();
-      let recipe;
+      console.log(`📤 Checking LLM Studio Server at: ${baseUrl}`);
 
       try {
-        recipe = await generateRecipe(testParams);
-        const endTime = Date.now();
-        const duration = ((endTime - startTime) / 1000).toFixed(2);
+        // Try to fetch the models endpoint
+        const modelsUrl = `${env.LLM_STUDIO_ENDPOINT}/models`;
+        console.log(`📤 Request: GET ${modelsUrl}`);
 
-        console.log(`\n✅ Recipe generated in ${duration}s`);
-        console.log('\n🎉 ═════════════ GENERATED RECIPE ═════════════');
-        console.log(`   Name: ${recipe.name}`);
-        console.log(`   Description: ${recipe.description}`);
-        console.log('\n   📝 Ingredients:');
-        recipe.ingredients?.forEach((ing, idx) => {
-          console.log(`      ${idx + 1}. ${ing.amount} ${ing.name}`);
-        });
-        console.log('\n   🔄 Steps:');
-        recipe.steps?.forEach((step, idx) => {
-          console.log(`      ${idx + 1}. ${step}`);
-        });
-        console.log('\n   🔧 Equipment Used:');
-        recipe.equipmentUsed?.forEach(eq => {
-          console.log(`      - ${eq}`);
-        });
-        console.log('═══════════════════════════════════════════════\n');
-
-        // Validate recipe structure
-        expect(recipe).toBeDefined();
-        expect(recipe.name).toBeDefined();
-        expect(typeof recipe.name).toBe('string');
-        expect(recipe.name.length).toBeGreaterThan(0);
-
-        expect(recipe.description).toBeDefined();
-        expect(typeof recipe.description).toBe('string');
-        expect(recipe.description.length).toBeGreaterThan(0);
-
-        expect(Array.isArray(recipe.ingredients)).toBe(true);
-        expect(recipe.ingredients.length).toBeGreaterThan(0);
-
-        expect(Array.isArray(recipe.steps)).toBe(true);
-        expect(recipe.steps.length).toBeGreaterThan(0);
-
-        // Validate each ingredient has required fields
-        recipe.ingredients.forEach((ingredient, idx) => {
-          expect(ingredient.name).toBeDefined();
-          expect(typeof ingredient.name).toBe('string');
-          expect(ingredient.amount).toBeDefined();
-          expect(typeof ingredient.amount).toBe('string');
-
-          console.log(
-            `   ✓ Ingredient ${idx + 1} valid: ${ingredient.amount} ${ingredient.name}`
-          );
+        const response = await fetch(modelsUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
         });
 
-        // Validate each step is a string
-        recipe.steps.forEach((step, idx) => {
-          expect(typeof step).toBe('string');
-          expect(step.length).toBeGreaterThan(0);
-          console.log(
-            `   ✓ Step ${idx + 1} valid: ${step.substring(0, 50)}...`
-          );
-        });
+        console.log(`📥 Response Status: ${response.status}`);
 
-        // Validate equipment used
-        if (recipe.equipmentUsed) {
-          expect(Array.isArray(recipe.equipmentUsed)).toBe(true);
-          recipe.equipmentUsed.forEach(eq => {
-            expect(typeof eq).toBe('string');
-            expect(eq.length).toBeGreaterThan(0);
-          });
-          console.log(
-            `   ✓ Equipment list valid: ${recipe.equipmentUsed.length} items`
-          );
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`📥 Available models:`, JSON.stringify(data, null, 2));
+          expect(response.status).toBe(200);
+          console.log('✅ LLM Studio Server is accessible!\n');
+        } else {
+          console.log('⚠️  Server responded but with non-200 status');
+          console.log(`   Response: ${await response.text()}`);
+          // Don't fail the test, just warn
         }
-
-        console.log('\n✅ Recipe validation passed!\n');
       } catch (error) {
-        console.error('\n❌ Recipe generation failed:', error);
-        if (error instanceof Error) {
-          console.error('   Error message:', error.message);
-          console.error('   Stack trace:', error.stack);
-        }
-        throw error;
+        console.error('❌ Failed to connect to LLM Studio Server:', error);
+        throw new Error(
+          `Cannot connect to LLM Studio Server at ${env.LLM_STUDIO_ENDPOINT}. ` +
+            `Please ensure LLM Studio is running on ${baseUrl}`
+        );
       }
-    },
-    { timeout: 60000 } // 60 second timeout
+    }
   );
+
+  test('Should generate a valid recipe using LLM Studio Server', async () => {
+    console.log('┌─────────────────────────────────────────────────────────┐');
+    console.log('│ 🍸 TEST: Recipe Generation via LLM Studio Server        │');
+    console.log('└─────────────────────────────────────────────────────────┘');
+
+    const testParams = {
+      equipmentNames: [
+        'Cocktail Shaker',
+        'Jigger',
+        'Strainer',
+        'Highball Glass',
+      ],
+      ingredientNames: [
+        'Vodka',
+        'Lime Juice',
+        'Simple Syrup',
+        'Club Soda',
+        'Mint Leaves',
+      ],
+      moodName: 'Refreshing',
+      moodDescription:
+        'Light, crisp, and invigorating drinks perfect for a hot day',
+      moodExamples: 'Mojito, Tom Collins, Gin and Tonic',
+    };
+
+    console.log('📋 Test Parameters:');
+    console.log(`   Equipment: ${testParams.equipmentNames.join(', ')}`);
+    console.log(`   Ingredients: ${testParams.ingredientNames.join(', ')}`);
+    console.log(`   Mood: ${testParams.moodName}`);
+    console.log(
+      `   Using: ${env.LLM_STUDIO_ENDPOINT ? 'LLM Studio Server' : 'OpenAI API'}`
+    );
+
+    console.log('\n⏳ Generating recipe... (this may take 10-30 seconds)');
+
+    const startTime = Date.now();
+    let recipe;
+
+    try {
+      recipe = await generateRecipe(testParams);
+      const endTime = Date.now();
+      const duration = ((endTime - startTime) / 1000).toFixed(2);
+
+      console.log(`\n✅ Recipe generated in ${duration}s`);
+      console.log('\n🎉 ═════════════ GENERATED RECIPE ═════════════');
+      console.log(`   Name: ${recipe.name}`);
+      console.log(`   Description: ${recipe.description}`);
+      console.log('\n   📝 Ingredients:');
+      recipe.ingredients?.forEach((ing, idx) => {
+        console.log(`      ${idx + 1}. ${ing.amount} ${ing.name}`);
+      });
+      console.log('\n   🔄 Steps:');
+      recipe.steps?.forEach((step, idx) => {
+        console.log(`      ${idx + 1}. ${step}`);
+      });
+      console.log('\n   🔧 Equipment Used:');
+      recipe.equipmentUsed?.forEach(eq => {
+        console.log(`      - ${eq}`);
+      });
+      console.log('═══════════════════════════════════════════════\n');
+
+      // Validate recipe structure
+      expect(recipe).toBeDefined();
+      expect(recipe.name).toBeDefined();
+      expect(typeof recipe.name).toBe('string');
+      expect(recipe.name.length).toBeGreaterThan(0);
+
+      expect(recipe.description).toBeDefined();
+      expect(typeof recipe.description).toBe('string');
+      expect(recipe.description.length).toBeGreaterThan(0);
+
+      expect(Array.isArray(recipe.ingredients)).toBe(true);
+      expect(recipe.ingredients.length).toBeGreaterThan(0);
+
+      expect(Array.isArray(recipe.steps)).toBe(true);
+      expect(recipe.steps.length).toBeGreaterThan(0);
+
+      // Validate each ingredient has required fields
+      recipe.ingredients.forEach((ingredient, idx) => {
+        expect(ingredient.name).toBeDefined();
+        expect(typeof ingredient.name).toBe('string');
+        expect(ingredient.amount).toBeDefined();
+        expect(typeof ingredient.amount).toBe('string');
+
+        console.log(
+          `   ✓ Ingredient ${idx + 1} valid: ${ingredient.amount} ${ingredient.name}`
+        );
+      });
+
+      // Validate each step is a string
+      recipe.steps.forEach((step, idx) => {
+        expect(typeof step).toBe('string');
+        expect(step.length).toBeGreaterThan(0);
+        console.log(`   ✓ Step ${idx + 1} valid: ${step.substring(0, 50)}...`);
+      });
+
+      // Validate equipment used
+      if (recipe.equipmentUsed) {
+        expect(Array.isArray(recipe.equipmentUsed)).toBe(true);
+        recipe.equipmentUsed.forEach(eq => {
+          expect(typeof eq).toBe('string');
+          expect(eq.length).toBeGreaterThan(0);
+        });
+        console.log(
+          `   ✓ Equipment list valid: ${recipe.equipmentUsed.length} items`
+        );
+      }
+
+      console.log('\n✅ Recipe validation passed!\n');
+    } catch (error) {
+      console.error('\n❌ Recipe generation failed:', error);
+      if (error instanceof Error) {
+        console.error('   Error message:', error.message);
+        console.error('   Stack trace:', error.stack);
+      }
+      throw error;
+    }
+  });
 
   test(
     'Should handle different mood types',
+    { timeout: 120000 }, // 120 second timeout for multiple generations
     async () => {
       console.log(
         '┌─────────────────────────────────────────────────────────┐'
@@ -281,12 +280,12 @@ describe('LLM Studio Server Integration Tests', () => {
       }
 
       console.log('\n✅ Multiple mood types test passed!\n');
-    },
-    { timeout: 120000 } // 120 second timeout for multiple generations
+    }
   );
 
   test(
     'Should validate recipe ingredients match input ingredients',
+    { timeout: 60000 }, // 60 second timeout
     async () => {
       console.log(
         '┌─────────────────────────────────────────────────────────┐'
@@ -353,7 +352,6 @@ describe('LLM Studio Server Integration Tests', () => {
       expect(recipe.ingredients.length).toBeGreaterThan(0);
 
       console.log('\n✅ Ingredient validation test completed!\n');
-    },
-    { timeout: 60000 } // 60 second timeout
+    }
   );
 });

@@ -200,3 +200,13 @@ Dockerfile included for CI/CD. Uses `oven/bun:latest`, exposes port 6174, health
 ## Git Workflow
 
 - Do not use feature branches for code changes. Always stay on the current branch.
+
+## Testing
+
+- **One runner, two configs.** `bun run test` (`vitest.config.ts`) excludes `**/*.db.test.ts` — 4 files, 55 tests, never touches a database; this is what CI runs. `bun run test:db` (`vitest.db.config.ts`) collects only those files and is **manual, never run in CI**.
+- **`TEST_DATABASE_URL`, not `DATABASE_URL`.** `tests/setup.db.ts` requires the host be exactly `localhost` (`127.0.0.1` refused). `tests/setup.ts` deletes `DATABASE_URL` outright.
+- **The db suite needs external services.** `src/integration.db.test.ts` expects the API on `:6174` — use `./run-integration-tests.sh`, which starts one — and `src/llm-studio.db.test.ts` expects LM Studio on `:1234`. Without them those tests fail; that is environmental, not a regression.
+- These three files were previously orphaned: `test:integration` was `vitest run tests/*.test.ts`, and `tests/` contains only `unit/`, so the glob matched nothing and they never ran under any script.
+- **`src/config/env.ts` precedence is `process.env` > `.env.local` > `.env`.** It used to be the reverse, which let a committed file silently override an exported variable — and defeated the database guard, since the guard sets `DATABASE_URL` in `process.env` and `.env` replaced it. Do not flip it back.
+- `src/config/env.ts` derives its root from `import.meta.url`, not `import.meta.dir`; the latter is Bun-only and is `undefined` under Node, which is what vitest runs on.
+

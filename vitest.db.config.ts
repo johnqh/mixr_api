@@ -1,0 +1,16 @@
+import { defineConfig } from "vitest/config";
+export default defineConfig({
+  test: {
+    environment: "node",
+    setupFiles: ["./tests/setup.db.ts"],
+    include: ["**/*.db.test.ts"],
+    exclude: ["**/node_modules/**", "**/dist/**"],
+    // One database, shared across files. Parallel files corrupt each other.
+    fileParallelism: false,
+    server: {
+      deps: {
+        inline: ["@sudobility/subscription_service"],
+      },
+    },
+  },
+});

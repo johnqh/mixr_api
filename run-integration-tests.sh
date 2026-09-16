@@ -4,10 +4,12 @@ echo "🚀 Starting MIXR API Integration Tests"
 echo "========================================"
 echo ""
 
-# Check if .env file exists
+# Database tests read TEST_DATABASE_URL, never DATABASE_URL, and the guard
+# refuses any host but localhost. .env is still needed for OPENAI_API_KEY and
+# for the server this script starts.
 if [ ! -f .env ]; then
   echo "❌ Error: .env file not found"
-  echo "Please create a .env file with your DATABASE_URL and OPENAI_API_KEY"
+  echo "Please create a .env file with your OPENAI_API_KEY"
   exit 1
 fi
 
@@ -17,7 +19,7 @@ if curl -s http://localhost:6174/health > /dev/null 2>&1; then
   echo ""
   echo "Running integration tests..."
   echo ""
-  ~/.bun/bin/bun test src/integration.test.ts
+  TEST_DATABASE_URL=${TEST_DATABASE_URL:-postgresql://localhost:5432/mixr_test} ~/.bun/bin/bun run test:db
   exit $?
 fi
 
@@ -50,7 +52,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
   echo ""
   echo "Running integration tests..."
   echo ""
-  ~/.bun/bin/bun test src/integration.test.ts
+  TEST_DATABASE_URL=${TEST_DATABASE_URL:-postgresql://localhost:5432/mixr_test} ~/.bun/bin/bun run test:db
   TEST_EXIT_CODE=$?
 
   echo ""

@@ -1,4 +1,4 @@
-import { test, expect, beforeAll, afterAll, describe } from 'bun:test';
+import { test, expect, beforeAll, afterAll, describe } from 'vitest';
 import {
   db,
   users,
@@ -52,7 +52,7 @@ async function waitForServer(maxAttempts = 10) {
         return true;
       }
     } catch (error) {
-      await Bun.sleep(1000);
+      await new Promise(r => setTimeout(r, 1000)); // was Bun.sleep; no Node equivalent
     }
   }
   throw new Error('Server did not start in time');
